@@ -1,0 +1,122 @@
+services:
+  llama:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llama-coder
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - llama_models:/models
+    environment:
+      LLAMA_MODEL: ${LLAMA_MODEL:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
+    command:
+      - --model
+      - /models/${LLAMA_MODEL:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --n-gpu-layers
+      - "999"
+      - --ctx-size
+      - "8192"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - ai-net
+
+  llama-qwen3:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llama-qwen3
+    profiles:
+      - extra
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    volumes:
+      - llama_models:/models
+    command:
+      - --model
+      - /models/Qwen3-14B-Q4_K_M.gguf
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --n-gpu-layers
+      - "10"
+      - --ctx-size
+      - "8192"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - ai-net
+
+  llama-devs:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llama-devs
+    profiles:
+      - extra
+    restart: unless-stopped
+    ports:
+      - "8083:8080"
+    volumes:
+      - llama_models:/models
+    command:
+      - --model
+      - /models/mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --n-gpu-layers
+      - "20"
+      - --ctx-size
+      - "4096"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - ai-net
+
+  web:
+    image: ghcr.io/open-webui/open-webui:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - open_webui_data:/app/backend/data
+    environment:
+      - OLLAMA_BASE_URL=http://llama:8080
+      - OPENAI_API_KEY=llama
+      - USE_OLLAMA_DOCKER=false
+      - PORT=3000
+      - ENABLE_WEB_SEARCH=true
+      - WEB_SEARCH_ENGINE=duckduckgo
+    depends_on:
+      - llama
+    networks:
+      - ai-net
+
+volumes:
+  llama_models:
+    driver: local
+  open_webui_data:
+    driver: local
+
+networks:
+  ai-net:
+    driver: bridge
