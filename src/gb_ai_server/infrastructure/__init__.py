@@ -16,7 +16,7 @@ from .compose import (
     DockerComposeBuiltin,
     FallbackComposeDetector,
 )
-from .persistence import HuggingFaceModelDownloader
+from .persistence import HuggingFaceModelDownloader, ClineModelRegistrar
 from .http import CurlHttpClient
 from .di import Container
 
@@ -37,5 +37,6 @@ __all__: list[str] = [
     "FallbackComposeDetector",
     "HuggingFaceModelDownloader",
     "CurlHttpClient",
+    "ClineModelRegistrar",
     "Container",
 ]
