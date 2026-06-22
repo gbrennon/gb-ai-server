@@ -14,6 +14,7 @@ from ...application.services import (
     ShowLogsService,
     ModelCopierService,
     HealthVerifierService,
+    RegisterModelsService,
 )
 from ..logging import TerminalLogger
 from ..container_runtime.detector import FallbackRuntimeDetector
@@ -23,6 +24,7 @@ from ..http.curl_client import CurlHttpClient
 if TYPE_CHECKING:
     from ...application.ports.outbound import ContainerRuntime, ComposeTool
     from ...application.ports.outbound.model_downloader import ModelDownloader
+    from ...application.ports.outbound.model_registrar import ModelRegistrar
 
 
 class Container:
@@ -83,3 +85,6 @@ class Container:
             logger=self._logger,
             http_client=self._http_client,
         )
+
+    def model_registrar(self, registrar: ModelRegistrar) -> RegisterModelsService:
+        return RegisterModelsService(logger=self._logger, registrar=registrar)
