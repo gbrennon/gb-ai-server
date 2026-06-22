@@ -1,0 +1,26 @@
+{
+  "which_sh": {
+    "executable": "sh",
+    "expected_to_exist": true,
+    "captured_stdout": "/usr/bin/sh"
+  },
+  "which_nonexistent": {
+    "executable": "nonexistent_cmd_xyz",
+    "expected_to_exist": false,
+    "captured_stdout": ""
+  },
+  "echo_hello": {
+    "args": ["echo", "hello world"],
+    "expected_returncode": 0,
+    "expected_stdout": "hello world\n",
+    "expected_stderr": "",
+    "expected_success": true
+  },
+  "exit_1": {
+    "args": ["sh", "-c", "exit 1"],
+    "expected_returncode": 1,
+    "expected_stdout": "",
+    "expected_stderr": "",
+    "expected_success": false
+  }
+}
