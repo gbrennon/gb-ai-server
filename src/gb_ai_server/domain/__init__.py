@@ -3,10 +3,12 @@
 from .model_entry import ModelEntry
 from .port_allocator import PortAllocator
 from .container_namer import ContainerNamer
-from .resource_requirements import ResourceRequirements, ResourceRequirementsMapper
-from .health_check_strategy import HealthCheckStrategy, HealthCheckTimeoutCalculator
+from .resource_requirements import ResourceRequirements
+from .resource_requirements_mapper import ResourceRequirementsMapper
+from .health_check_strategy import HealthCheckStrategy
+from .health_check_timeout_calculator import HealthCheckTimeoutCalculator
 from .wait_strategy import WaitStrategy
-from .model_downloader import ModelDownloader
+from .command_result import CommandResult
 
 __all__: list[str] = [
     "ModelEntry",
@@ -17,5 +19,5 @@ __all__: list[str] = [
     "HealthCheckStrategy",
     "HealthCheckTimeoutCalculator",
     "WaitStrategy",
-    "ModelDownloader",
+    "CommandResult",
 ]
