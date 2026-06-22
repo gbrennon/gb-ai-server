@@ -41,6 +41,15 @@ class BootstrapPresenter:
     def health_check_failed(self) -> None:
         self._logger.error("Health check failed")
 
+    def models_registered(self, registered_models: list[str]) -> None:
+        self._logger.ok(
+            f"Registered {len(registered_models)} model(s) with Cline: "
+            f"{', '.join(registered_models)}"
+        )
+
+    def registration_failed(self) -> None:
+        self._logger.warn("Failed to register models with Cline")
+
     def report_success(self) -> None:
         self._logger.section("Bootstrap Complete")
         self._logger.ok("llama.cpp is running")
