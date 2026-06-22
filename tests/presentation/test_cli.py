@@ -9,7 +9,7 @@ from gb_ai_server.presentation.cli import build_parser, main
 class TestBuildParser:
     def test_returns_parser_with_prog(self) -> None:
         parser = build_parser()
-        assert parser.prog == "bootstrap"
+        assert parser.prog == "gb-ai-server"
 
     def test_defaults_are_correct(self) -> None:
         parser = build_parser()
@@ -67,3 +67,41 @@ class TestMain:
             result = main(["--skip-download", "--skip-health"])
 
             assert result == 1
+
+    def test_register_models_successful(self, tmp_path: Path) -> None:
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+        conf_file = scripts_dir / "models.conf.sh"
+        conf_file.write_text('MODELS=("test-model:latest|test.gguf|https://example.com")\n')
+
+        with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
+            with patch("gb_ai_server.presentation.cli.ClineModelRegistrar") as MockRegistrar:
+                instance = MockRegistrar.return_value
+                instance.register_models.return_value = True
+
+                result = main(["--register-models"])
+
+                assert result == 0
+                MockRegistrar.assert_called_once()
+                instance.register_models.assert_called_once()
+
+    def test_register_models_failure(self, tmp_path: Path) -> None:
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+        conf_file = scripts_dir / "models.conf.sh"
+        conf_file.write_text('MODELS=("test-model:latest|test.gguf|https://example.com")\n')
+
+        with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
+            with patch("gb_ai_server.presentation.cli.ClineModelRegistrar") as MockRegistrar:
+                instance = MockRegistrar.return_value
+                instance.register_models.return_value = False
+
+                result = main(["--register-models"])
+
+                assert result == 1
+
+    def test_register_models_missing_config(self, tmp_path: Path) -> None:
+        with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
+            result = main(["--register-models"])
+            assert result == 1
+
