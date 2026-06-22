@@ -1,33 +1,41 @@
-"""Infrastructure layer - adapters for external systems."""
+"""Infrastructure layer - adapters for external systems and utilities."""
 
+from .command import Command, CommandResult
+from .logging import LogLevel, TerminalLogger
+from .config import Environment
 from .container_runtime import (
-    ContainerRuntime,
     ContainerInfo,
     PodmanRuntime,
     DockerRuntime,
-    RuntimeDetector,
+    FallbackRuntimeDetector,
 )
-from .compose_tool import (
-    ComposeTool,
+from .compose import (
     PodmanComposeStandalone,
     PodmanComposeBuiltin,
     DockerComposeStandalone,
     DockerComposeBuiltin,
-    ComposeToolDetector,
+    FallbackComposeDetector,
 )
-from .model_downloader import HuggingFaceModelDownloader
+from .persistence import HuggingFaceModelDownloader
+from .http import CurlHttpClient
+from .di import Container
 
 __all__: list[str] = [
-    "ContainerRuntime",
+    "Command",
+    "CommandResult",
+    "LogLevel",
+    "TerminalLogger",
+    "Environment",
     "ContainerInfo",
     "PodmanRuntime",
     "DockerRuntime",
-    "RuntimeDetector",
-    "ComposeTool",
+    "FallbackRuntimeDetector",
     "PodmanComposeStandalone",
     "PodmanComposeBuiltin",
     "DockerComposeStandalone",
     "DockerComposeBuiltin",
-    "ComposeToolDetector",
+    "FallbackComposeDetector",
     "HuggingFaceModelDownloader",
+    "CurlHttpClient",
+    "Container",
 ]
