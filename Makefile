@@ -1,4 +1,4 @@
-.PHONY: help up down logs status ps models check-cdi clean restart bootstrap bootstrap-dry-run bootstrap-skip-health
+.PHONY: help up down logs status ps models check-cdi clean restart bootstrap bootstrap-dry-run bootstrap-skip-health register-models register-models-quick
 
 COMPOSE_FILE := docker-compose.yml
 ENV_FILE := .env
@@ -43,6 +43,7 @@ up:
 	@echo ""
 	@echo "Access Open WebUI: http://localhost:3000"
 	@echo "API endpoint: http://localhost:8081 (llama-coder)"
+	$(MAKE) register-models-quick
 
 # Full stack with extras
 up-all:
@@ -55,6 +56,7 @@ up-all:
 	@echo "  Qwen3:          http://localhost:8082"
 	@echo "  Devstral:       http://localhost:8083"
 	@echo "  Gemma4:         http://localhost:8084"
+	$(MAKE) register-models-quick
 
 down:
 	$(COMPOSE) down
@@ -100,6 +102,13 @@ clean:
 	$(COMPOSE) down
 	@echo "Containers removed (volumes retained)"
 
+# Register models with Cline
+register-models:
+	uv run gb-ai-server --register-models --skip-download --skip-health
+
+register-models-quick:
+	uv run gb-ai-server --register-models --skip-download --skip-health 2>/dev/null || true
+
 # Bootstrap — orchestrate the full llama.cpp bootstrap via uv
 bootstrap:
 	uv run gb-ai-server
@@ -109,6 +118,9 @@ bootstrap-dry:
 
 bootstrap-quick:
 	uv run gb-ai-server --skip-download --skip-health
+
+bootstrap-register:
+	uv run gb-ai-server --register-models
 
 clean-all:
 	@read -p "WARNING: This will delete all containers AND volumes. Continue? [y/N] " -n 1 -r; \

@@ -11,11 +11,11 @@ class TerminalLogger:
     """Structured logging with optional terminal colorization."""
 
     _COLOR_CODES: dict[LogLevel, int] = {
-        LogLevel.DEBUG: 7,
-        LogLevel.INFO: 4,
-        LogLevel.OK: 2,
-        LogLevel.WARN: 3,
-        LogLevel.ERROR: 1,
+        LogLevel.DEBUG: 37,  # White
+        LogLevel.INFO: 34,   # Blue
+        LogLevel.OK: 32,     # Green
+        LogLevel.WARN: 33,   # Yellow
+        LogLevel.ERROR: 31,  # Red
     }
 
     def __init__(
@@ -34,46 +34,14 @@ class TerminalLogger:
 
     @staticmethod
     def _detect_tty_color() -> bool:
-        if not sys.stdout.isatty():
-            return False
-        try:
-            result = subprocess.run(
-                ["tput", "colors"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            return result.returncode == 0
-        except FileNotFoundError:
-            return False
+        return sys.stdout.isatty()
 
     def _colorize(self, level: LogLevel, text: str) -> str:
         if not self.use_color:
             return text
 
         color_code = self._COLOR_CODES[level]
-        try:
-            bold_on = subprocess.run(
-                ["tput", "bold"],
-                capture_output=True,
-                text=True,
-                check=False,
-            ).stdout
-            color_on = subprocess.run(
-                ["tput", "setaf", str(color_code)],
-                capture_output=True,
-                text=True,
-                check=False,
-            ).stdout
-            reset = subprocess.run(
-                ["tput", "sgr0"],
-                capture_output=True,
-                text=True,
-                check=False,
-            ).stdout
-            return f"{bold_on}{color_on}{text}{reset}"
-        except Exception:
-            return text
+        return f"\x1b[1;{color_code}m{text}\x1b[0m"
 
     def _log(
         self,
@@ -113,3 +81,4 @@ class TerminalLogger:
         print(f"\n{separator}", file=self.stream_out)
         print(f" {title}", file=self.stream_out)
         print(f"{separator}", file=self.stream_out)
+
