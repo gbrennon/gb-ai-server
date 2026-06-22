@@ -8,10 +8,12 @@ from .restart_services_response import RestartServicesResponse
 from .list_services_response import ListServicesResponse
 from .show_logs_response import ShowLogsResponse
 from .copy_models_response import CopyModelsResponse
+from .register_models_response import RegisterModelsResponse
 from .verify_health_response import VerifyHealthResponse
 
 __all__: list[str] = [
     "DownloadModelsResponse",
+    "RegisterModelsResponse",
     "VerifyPrerequisitesResponse",
     "StartServicesResponse",
     "StopServicesResponse",
