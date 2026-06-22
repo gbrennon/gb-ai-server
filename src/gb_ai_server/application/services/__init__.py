@@ -9,6 +9,7 @@ from .list_services_service import ListServicesService
 from .show_logs_service import ShowLogsService
 from .model_copier_service import ModelCopierService
 from .health_verifier_service import HealthVerifierService
+from .register_models_service import RegisterModelsService
 
 __all__: list[str] = [
     "ModelDownloaderService",
@@ -20,4 +21,5 @@ __all__: list[str] = [
     "ShowLogsService",
     "ModelCopierService",
     "HealthVerifierService",
+    "RegisterModelsService",
 ]
