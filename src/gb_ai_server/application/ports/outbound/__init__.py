@@ -7,6 +7,7 @@ from .logger import Logger
 from .runtime_detector import RuntimeDetector
 from .compose_tool_detector import ComposeToolDetector
 from .http_client import HttpClient
+from .model_registrar import ModelRegistrar
 
 __all__: list[str] = [
     "ModelDownloader",
@@ -16,4 +17,5 @@ __all__: list[str] = [
     "RuntimeDetector",
     "ComposeToolDetector",
     "HttpClient",
+    "ModelRegistrar",
 ]
