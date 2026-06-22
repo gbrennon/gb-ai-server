@@ -1,7 +1,7 @@
-"""Enable: python -m src/llama_bootstrap"""
+"""Enable: python -m gb_ai_server"""
 import sys
 
-from gb_ai_server.bootstrap import main
+from gb_ai_server.presentation.cli import main
 
 if __name__ == "__main__":
     sys.exit(main())

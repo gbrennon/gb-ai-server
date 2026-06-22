@@ -13,10 +13,12 @@ dependencies = [
     "jinja2>=3.1.5",
     "pyyaml>=6.0",
     "huggingface-hub>=1.20.1",
+    "pytest-cov>=7.1.0",
 ]
 
 [project.scripts]
 pr-auto-reviewer = "pr_auto_reviewer.cli:main"
+gb-ai-server = "gb_ai_server.presentation.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.9.18,<0.10.0"]
@@ -44,7 +46,7 @@ asyncio_mode = "strict"
 addopts = [
     "--strict-markers",
     "--strict-config",
-    "--cov=pr_auto_reviewer",
+    "--cov=gb_ai_server",
     "--cov-report=term-missing",
 ]
 

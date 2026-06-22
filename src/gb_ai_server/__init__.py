@@ -5,21 +5,20 @@ Hexagonal architecture with strict PEP 695 typing compliance.
 Domain logic is pure (100% testable), infrastructure is pluggable.
 
 Layers:
-  - Domain: Pure functions, no I/O (llama_bootstrap.domain)
-  - Application: Orchestration services (llama_bootstrap.application)
-  - Infrastructure: Adapters for Docker/Podman (llama_bootstrap.infrastructure)
-  - Core: Shared utilities (llama_bootstrap.core)
+  - Domain: Pure functions, no I/O
+  - Application: Orchestration services with inbound/outbound ports
+  - Infrastructure: Adapters, CLI, persistence, logging, config
 """
 
-from .core import (
-    Logger,
-    LogLevel,
-    Environment,
+from .infrastructure import (
     Command,
-    CommandResult,
+    LogLevel,
+    TerminalLogger,
+    Environment,
 )
 
 from .domain import (
+    CommandResult,
     ModelEntry,
     PortAllocator,
     ContainerNamer,
@@ -28,42 +27,49 @@ from .domain import (
     HealthCheckStrategy,
     HealthCheckTimeoutCalculator,
     WaitStrategy,
+)
+
+from .application.ports.outbound import (
     ModelDownloader,
+    ContainerRuntime,
+    ComposeTool,
 )
 
 from .infrastructure import (
-    ContainerRuntime,
     ContainerInfo,
     PodmanRuntime,
     DockerRuntime,
-    RuntimeDetector,
-    ComposeTool,
+    FallbackRuntimeDetector,
     PodmanComposeStandalone,
     PodmanComposeBuiltin,
     DockerComposeStandalone,
     DockerComposeBuiltin,
-    ComposeToolDetector,
+    FallbackComposeDetector,
     HuggingFaceModelDownloader,
 )
 
 from .application import (
-    ModelDownloadService,
-    PrerequisiteVerifier,
-    ServiceOrchestrator,
-    ModelCopier,
-    HealthVerifier,
+    ModelDownloaderService,
+    PrerequisiteVerifierService,
+    StartServicesService,
+    StopServicesService,
+    RestartServicesService,
+    ListServicesService,
+    ShowLogsService,
+    ModelCopierService,
+    HealthVerifierService,
 )
 
 __version__ = "0.1.0"
 
 __all__: list[str] = [
-    # Core
-    "Logger",
-    "LogLevel",
-    "Environment",
+    # Infrastructure — Command & Config
     "Command",
-    "CommandResult",
+    "LogLevel",
+    "TerminalLogger",
+    "Environment",
     # Domain
+    "CommandResult",
     "ModelEntry",
     "PortAllocator",
     "ContainerNamer",
@@ -72,24 +78,29 @@ __all__: list[str] = [
     "HealthCheckStrategy",
     "HealthCheckTimeoutCalculator",
     "WaitStrategy",
+    # Outbound Ports
     "ModelDownloader",
-    # Infrastructure
     "ContainerRuntime",
+    "ComposeTool",
+    # Infrastructure — Adapters
     "ContainerInfo",
     "PodmanRuntime",
     "DockerRuntime",
-    "RuntimeDetector",
-    "ComposeTool",
+    "FallbackRuntimeDetector",
     "PodmanComposeStandalone",
     "PodmanComposeBuiltin",
     "DockerComposeStandalone",
     "DockerComposeBuiltin",
-    "ComposeToolDetector",
+    "FallbackComposeDetector",
     "HuggingFaceModelDownloader",
     # Application
-    "ModelDownloadService",
-    "PrerequisiteVerifier",
-    "ServiceOrchestrator",
-    "ModelCopier",
-    "HealthVerifier",
+    "ModelDownloaderService",
+    "PrerequisiteVerifierService",
+    "StartServicesService",
+    "StopServicesService",
+    "RestartServicesService",
+    "ListServicesService",
+    "ShowLogsService",
+    "ModelCopierService",
+    "HealthVerifierService",
 ]
