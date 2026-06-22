@@ -1,4 +1,4 @@
-.PHONY: help up down logs status ps models check-cdi clean restart
+.PHONY: help up down logs status ps models check-cdi clean restart bootstrap bootstrap-dry-run bootstrap-skip-health
 
 COMPOSE_FILE := docker-compose.yml
 ENV_FILE := .env
@@ -26,6 +26,11 @@ help:
 	@echo "  check-cdi       Verify CDI setup and list available GPUs"
 	@echo "  models          List downloaded models in llama_models volume"
 	@echo ""
+	@echo "Bootstrap (uv run gb-ai-server):"
+	@echo "  bootstrap       Full bootstrap: prerequisites → models → start → copy → health"
+	@echo "  bootstrap-dry   Dry-run mode (preview only)"
+	@echo "  bootstrap-quick Skip download & health check (faster)"
+	@echo ""
 	@echo "Maintenance:"
 	@echo "  clean           Remove all containers (keeps volumes)"
 	@echo "  clean-all       Remove containers AND volumes (WARNING: data loss)"
@@ -33,7 +38,7 @@ help:
 
 # Primary stack
 up:
-	$(COMPOSE) up -d
+	$(COMPOSE) down 2>/dev/null; $(COMPOSE) up -d
 	@echo "✓ Primary stack started (llama-coder + open-webui)"
 	@echo ""
 	@echo "Access Open WebUI: http://localhost:3000"
@@ -41,7 +46,7 @@ up:
 
 # Full stack with extras
 up-all:
-	$(COMPOSE) --profile extra up -d
+	$(COMPOSE) down 2>/dev/null; $(COMPOSE) --profile extra up -d
 	@echo "✓ Full stack started (all LLM services + open-webui)"
 	@echo ""
 	@echo "Endpoints:"
@@ -94,6 +99,16 @@ models:
 clean:
 	$(COMPOSE) down
 	@echo "Containers removed (volumes retained)"
+
+# Bootstrap — orchestrate the full llama.cpp bootstrap via uv
+bootstrap:
+	uv run gb-ai-server
+
+bootstrap-dry:
+	uv run gb-ai-server --dry-run
+
+bootstrap-quick:
+	uv run gb-ai-server --skip-download --skip-health
 
 clean-all:
 	@read -p "WARNING: This will delete all containers AND volumes. Continue? [y/N] " -n 1 -r; \
