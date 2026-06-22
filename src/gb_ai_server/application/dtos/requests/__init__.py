@@ -9,6 +9,7 @@ from .list_services_request import ListServicesRequest
 from .show_logs_request import ShowLogsRequest
 from .copy_models_request import CopyModelsRequest
 from .verify_health_request import VerifyHealthRequest
+from .register_models_request import RegisterModelsRequest
 
 __all__: list[str] = [
     "DownloadModelsRequest",
@@ -20,4 +21,5 @@ __all__: list[str] = [
     "ShowLogsRequest",
     "CopyModelsRequest",
     "VerifyHealthRequest",
+    "RegisterModelsRequest",
 ]
