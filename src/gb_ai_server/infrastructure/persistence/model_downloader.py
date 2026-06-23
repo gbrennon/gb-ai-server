@@ -13,8 +13,9 @@ if TYPE_CHECKING:
 class HuggingFaceModelDownloader:
     """Download models from Hugging Face Hub using huggingface_hub library."""
 
-    def __init__(self, logger: Logger) -> None:
+    def __init__(self, logger: Logger, token: str | None = None) -> None:
         self.logger = logger
+        self.token = token
 
     def download(
         self,
@@ -41,15 +42,37 @@ class HuggingFaceModelDownloader:
                 self.logger.warn(f"Could not parse HF repo from URL: {url}")
                 return False
 
-            hf_token = token or os.getenv("HF_TOKEN")
+            hf_token = token or self.token or os.getenv("HF_TOKEN")
 
-            hf_hub_download(
-                repo_id=repo_id,
-                filename=file_path,
-                local_dir=destination,
-                local_dir_use_symlinks=False,
-                token=hf_token,
-            )
+            using_hf_transfer = False
+            try:
+                import hf_transfer  # noqa: F401
+                os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+                using_hf_transfer = True
+            except ImportError:
+                pass
+
+            try:
+                hf_hub_download(
+                    repo_id=repo_id,
+                    filename=file_path,
+                    local_dir=destination,
+                    token=hf_token,
+                )
+            except Exception as e:
+                if using_hf_transfer:
+                    self.logger.warn(
+                        f"Accelerated download failed: {e}. Falling back to standard download method..."
+                    )
+                    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+                    hf_hub_download(
+                        repo_id=repo_id,
+                        filename=file_path,
+                        local_dir=destination,
+                        token=hf_token,
+                    )
+                else:
+                    raise
 
             if dest_path.exists() and dest_path.stat().st_size > 0:
                 size_mb = dest_path.stat().st_size / (1024 * 1024)
