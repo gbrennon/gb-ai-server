@@ -206,9 +206,24 @@ class ClineModelRegistrar:
                 if key.startswith("local llama") or key.startswith("local-llama"):
                     data["providers"].pop(key, None)
 
+        # Build all models dict (all models from config)
+        all_models: dict[str, dict] = {}
+        for display_name, filename, port, container_name in models:
+            all_models[filename] = {
+                "id": filename,
+                "name": filename,
+                "contextWindow": 8192,
+                "maxInputTokens": 8192,
+                "capabilities": ["streaming", "tools"],
+                "supportsVision": False,
+                "supportsAttachments": False,
+                "supportsReasoning": False,
+            }
+
+        # Register each container as a provider with ALL models
         for idx, (display_name, filename, port, container_name) in enumerate(models):
             # Use container name for provider ID (e.g., "llama-coder", "llama-qwen3")
-            provider_id = container_name if idx == 0 else f"{container_name}"
+            provider_id = container_name
             base_url = provider_base_url or f"http://localhost:{port}"
 
             data["providers"][provider_id] = {
@@ -217,18 +232,7 @@ class ClineModelRegistrar:
                     "baseUrl": f"{base_url}/v1",
                     "defaultModelId": filename,
                 },
-                "models": {
-                    filename: {
-                        "id": filename,
-                        "name": filename,
-                        "contextWindow": 8192,
-                        "maxInputTokens": 8192,
-                        "capabilities": ["streaming", "tools"],
-                        "supportsVision": False,
-                        "supportsAttachments": False,
-                        "supportsReasoning": False,
-                    }
-                }
+                "models": all_models.copy()
             }
 
             cli_provider_id = "openai-compatible" if idx == 0 else "openai-native"
@@ -238,18 +242,7 @@ class ClineModelRegistrar:
                     "baseUrl": f"{base_url}/v1",
                     "defaultModelId": filename,
                 },
-                "models": {
-                    filename: {
-                        "id": filename,
-                        "name": filename,
-                        "contextWindow": 8192,
-                        "maxInputTokens": 8192,
-                        "capabilities": ["streaming", "tools"],
-                        "supportsVision": False,
-                        "supportsAttachments": False,
-                        "supportsReasoning": False,
-                    }
-                }
+                "models": all_models.copy()
             }
 
         self._models_file.write_text(json.dumps(data, indent=2) + "\n")
