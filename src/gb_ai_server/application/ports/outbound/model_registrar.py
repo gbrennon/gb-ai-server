@@ -9,7 +9,7 @@ class ModelRegistrar(Protocol):
 
     def register_models(
         self,
-        models: list[tuple[str, str, int]],
+        models: list[tuple[str, str, int, str]],
         provider_base_url: str | None = None,
     ) -> bool:
         ...
