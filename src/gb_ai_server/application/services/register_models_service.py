@@ -27,7 +27,7 @@ class RegisterModelsService:
             provider_base_url=request.provider_base_url,
         )
 
-        registered_models = [name for name, _, _ in request.models]
+        registered_models = [name for name, _, _, _ in request.models]
         return RegisterModelsResponse(
             success=success,
             registered_models=registered_models,
