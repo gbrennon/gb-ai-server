@@ -1,11 +1,12 @@
 """CLI entry point for the llama.cpp bootstrap."""
 
+import os
 import argparse
 import sys
 from pathlib import Path
 
 from gb_ai_server.domain import PortAllocator
-from gb_ai_server.infrastructure import ClineModelRegistrar
+from gb_ai_server.infrastructure import ClineModelRegistrar, Environment
 from gb_ai_server.infrastructure.di.container import Container
 from gb_ai_server.infrastructure.logging import TerminalLogger
 from gb_ai_server.presentation.composer import BootstrapCompositionRoot
@@ -35,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--models-dir",
         type=Path,
-        default=Path("/tmp/llama_models"),
+        default=Path(os.getenv("MODELS_DIR", "/tmp/llama_models")),
         help="Directory for model files",
     )
     parser.add_argument(
@@ -58,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    Environment.load_env_file(Path(".env"))
     parser = build_parser()
     args = parser.parse_args(argv)
 
