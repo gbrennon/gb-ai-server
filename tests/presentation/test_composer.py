@@ -19,6 +19,12 @@ def mock_env() -> MagicMock:
     return env
 
 
+@pytest.fixture(autouse=True)
+def mock_cline_registrar() -> MagicMock:
+    with patch("gb_ai_server.presentation.composer.ClineModelRegistrar") as mock:
+        yield mock
+
+
 @pytest.fixture
 def mock_models() -> list[ModelEntry]:
     return [ModelEntry("qwen:7b", "qwen.gguf", "https://example.com/q")]
@@ -82,6 +88,7 @@ def _make_mock_container(
     container.model_copier.return_value = _make_mock_service_with_response(
         {"test": True}
     )
+    container.model_registrar.return_value = _make_mock_service()
 
     return container
 

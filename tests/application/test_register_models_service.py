@@ -12,7 +12,7 @@ class TestRegisterModelsService:
         service = RegisterModelsService(logger, registrar)
 
         request = RegisterModelsRequest(
-            models=[("model-a", "a.gguf", 8081)],
+            models=[("model-a", "a.gguf", 8081, "llama-coder")],
         )
         response = service.execute(request)
 
@@ -26,8 +26,8 @@ class TestRegisterModelsService:
         service = RegisterModelsService(logger, registrar)
 
         models = [
-            ("model-a", "a.gguf", 8081),
-            ("model-b", "b.gguf", 8082),
+            ("model-a", "a.gguf", 8081, "llama-coder"),
+            ("model-b", "b.gguf", 8082, "llama-qwen3"),
         ]
         request = RegisterModelsRequest(models=models)
         response = service.execute(request)
@@ -41,7 +41,7 @@ class TestRegisterModelsService:
         service = RegisterModelsService(logger, registrar)
 
         request = RegisterModelsRequest(
-            models=[("model-a", "a.gguf", 8081)],
+            models=[("model-a", "a.gguf", 8081, "llama-coder")],
         )
         response = service.execute(request)
 
@@ -65,13 +65,13 @@ class TestRegisterModelsService:
         service = RegisterModelsService(logger, registrar)
 
         request = RegisterModelsRequest(
-            models=[("model-a", "a.gguf", 8081)],
+            models=[("model-a", "a.gguf", 8081, "llama-coder")],
             provider_base_url="http://localhost:8081",
         )
         service.execute(request)
 
         registrar.register_models.assert_called_with(
-            models=[("model-a", "a.gguf", 8081)],
+            models=[("model-a", "a.gguf", 8081, "llama-coder")],
             provider_base_url="http://localhost:8081",
         )
 

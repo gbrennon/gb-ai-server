@@ -85,11 +85,15 @@ def _register_only(args: argparse.Namespace) -> int:
         logger.warn("No models configured")
         return 0
 
+    # Map model index to container name based on docker-compose services
+    container_names = _get_container_names(len(models))
+
     model_tuples = [
-        (m.display_name, m.filename, port)
-        for m, port in zip(
+        (m.display_name, m.filename, port, container_name)
+        for m, port, container_name in zip(
             models,
             PortAllocator.ports_for_models(len(models)),
+            container_names,
         )
     ]
 
@@ -107,6 +111,13 @@ def _register_only(args: argparse.Namespace) -> int:
 
     logger.warn("Failed to register models with Cline")
     return 1
+
+
+def _get_container_names(model_count: int) -> list[str]:
+    """Get container names for each model based on docker-compose service definitions."""
+    # Default container names matching docker-compose.yml
+    default_containers = ["llama-coder", "llama-qwen3", "llama-devs"]
+    return default_containers[:model_count]
 
 
 if __name__ == "__main__":

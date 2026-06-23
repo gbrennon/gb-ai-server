@@ -84,6 +84,15 @@ class TestMain:
                 assert result == 0
                 MockRegistrar.assert_called_once()
                 instance.register_models.assert_called_once()
+                # Verify the call includes container name (4-tuple)
+                call_args = instance.register_models.call_args
+                args, kwargs = call_args
+                # The service calls with keyword arguments: models=..., provider_base_url=...
+                models_arg = kwargs.get("models", args[0] if args else None)
+                assert models_arg is not None
+                assert len(models_arg) == 1
+                assert len(models_arg[0]) == 4  # (display_name, filename, port, container_name)
+                assert models_arg[0][3] == "llama-coder"
 
     def test_register_models_failure(self, tmp_path: Path) -> None:
         scripts_dir = tmp_path / "scripts"
