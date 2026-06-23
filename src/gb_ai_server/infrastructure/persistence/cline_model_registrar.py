@@ -51,7 +51,9 @@ class ClineModelRegistrar:
 
             first_display_name, first_filename, first_port, first_container = models[0]
             first_base_url = provider_base_url or f"http://localhost:{first_port}"
-            self._update_global_state(first_display_name, first_filename, first_base_url, first_container)
+            # Use provider-prefixed model ID for global state (e.g., "llama-coder/model.gguf")
+            first_model_id = f"{first_container}/{first_filename}"
+            self._update_global_state(first_display_name, first_model_id, first_base_url, first_container)
 
             self.logger.ok(
                 f"Registered {len(models)} model(s) with Cline"
@@ -79,6 +81,13 @@ class ClineModelRegistrar:
                 or data.get("open-ai-model-id")
             )
             # Check if provider is a llama container (starts with "llama-")
+            # Model ID in state is provider-prefixed (e.g., "llama-coder/model.gguf")
+            # Accept both prefixed and non-prefixed model names for backward compatibility
+            if model_id == model_name:
+                return True
+            # Check if model_name matches the suffix after provider prefix
+            if provider and provider.startswith("llama-") and model_id.startswith(f"{provider}/"):
+                return model_id == f"{provider}/{model_name}" or model_id.endswith(f"/{model_name}")
             return provider is not None and provider.startswith("llama-") and model_id == model_name
         except Exception:
             return False
@@ -206,11 +215,12 @@ class ClineModelRegistrar:
                 if key.startswith("local llama") or key.startswith("local-llama"):
                     data["providers"].pop(key, None)
 
-        # Build all models dict (all models from config)
+        # Build all models dict with provider-prefixed IDs (e.g., "llama-coder/model.gguf")
         all_models: dict[str, dict] = {}
         for display_name, filename, port, container_name in models:
-            all_models[filename] = {
-                "id": filename,
+            model_id = f"{container_name}/{filename}"
+            all_models[model_id] = {
+                "id": model_id,
                 "name": filename,
                 "contextWindow": 8192,
                 "maxInputTokens": 8192,
@@ -225,12 +235,13 @@ class ClineModelRegistrar:
             # Use container name for provider ID (e.g., "llama-coder", "llama-qwen3")
             provider_id = container_name
             base_url = provider_base_url or f"http://localhost:{port}"
+            default_model_id = f"{container_name}/{filename}"
 
             data["providers"][provider_id] = {
                 "provider": {
                     "name": provider_id,
                     "baseUrl": f"{base_url}/v1",
-                    "defaultModelId": filename,
+                    "defaultModelId": default_model_id,
                 },
                 "models": all_models.copy()
             }
@@ -240,7 +251,7 @@ class ClineModelRegistrar:
                 "provider": {
                     "name": "OpenAI Compatible" if idx == 0 else "OpenAI Native",
                     "baseUrl": f"{base_url}/v1",
-                    "defaultModelId": filename,
+                    "defaultModelId": default_model_id,
                 },
                 "models": all_models.copy()
             }
