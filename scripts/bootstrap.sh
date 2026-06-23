@@ -184,6 +184,13 @@ main() {
   restart_llama_container
   wait_for_llama_server
   verify_via_api || true
+
+  # Auto register models with Cline
+  if command -v uv >/dev/null 2>&1; then
+    log_info "Registering models with Cline..."
+    uv run gb-ai-server --register-models --skip-download --skip-health || log_warn "Failed to auto-register models with Cline"
+  fi
+
   finalize
 }
 
