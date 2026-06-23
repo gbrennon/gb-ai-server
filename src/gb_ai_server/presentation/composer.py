@@ -7,7 +7,7 @@ import traceback
 from argparse import Namespace
 
 from gb_ai_server.domain import ModelEntry, PortAllocator
-from gb_ai_server.infrastructure import Container, Environment, HuggingFaceModelDownloader
+from gb_ai_server.infrastructure import Container, Environment, HuggingFaceModelDownloader, ClineModelRegistrar
 from gb_ai_server.application.dtos.requests import (
     CopyModelsRequest,
     DownloadModelsRequest,
@@ -41,6 +41,7 @@ class BootstrapCompositionRoot:
             self._copy_models(verifier, models, args)
             self._restart_services(verifier, env)
             self._verify_health(args, models)
+            self._register_models(models)
             self._presenter.report_success()
             return 0
         except SystemExit:
@@ -154,3 +155,35 @@ class BootstrapCompositionRoot:
         ).success:
             self._presenter.health_check_failed()
             raise SystemExit(1)
+
+    def _register_models(self, models: list[ModelEntry]) -> None:
+        registrar = ClineModelRegistrar(self._di.logger)
+        service = self._di.model_registrar(registrar)
+
+        # Map model index to container name based on docker-compose services
+        # Primary service: llama -> llama-coder (port 8081)
+        # Extra services: llama-qwen3 -> llama-qwen3 (port 8082), llama-devs -> llama-devs (port 8083)
+        container_names = self._get_container_names(len(models))
+
+        model_tuples = [
+            (m.display_name, m.filename, port, container_name)
+            for m, port, container_name in zip(
+                models,
+                PortAllocator.ports_for_models(len(models)),
+                container_names,
+            )
+        ]
+
+        from gb_ai_server.application.dtos.requests.register_models_request import RegisterModelsRequest
+        request = RegisterModelsRequest(models=model_tuples)
+        response = service.execute(request)
+        if response.success:
+            self._presenter.models_registered([m.display_name for m in models])
+        else:
+            self._presenter.registration_failed()
+
+    def _get_container_names(self, model_count: int) -> list[str]:
+        """Get container names for each model based on docker-compose service definitions."""
+        # Default container names matching docker-compose.yml
+        default_containers = ["llama-coder", "llama-qwen3", "llama-devs"]
+        return default_containers[:model_count]
