@@ -321,6 +321,70 @@ class TestBootstrapCompositionRoot:
                 root = BootstrapCompositionRoot(container)
                 assert root.run(args) == 1
 
+    def test_start_services_uses_service_name_llama(
+        self, mock_env: MagicMock, mock_models: list[ModelEntry]
+    ) -> None:
+        args = Namespace(
+            dry_run=False,
+            skip_download=True,
+            skip_health=True,
+            models_dir=Path("/tmp/models"),
+            hf_token=None,
+            debug=False,
+        )
+        container = _make_mock_container()
+
+        with (
+            patch.object(
+                BootstrapCompositionRoot, "_setup_environment", return_value=mock_env
+            ),
+            patch.object(
+                BootstrapCompositionRoot,
+                "_load_models_config",
+                return_value=mock_models,
+            ),
+        ):
+            root = BootstrapCompositionRoot(container)
+            root.run(args)
+
+        execute_call = container.start_services.return_value.execute
+        execute_call.assert_called_once()
+        request = execute_call.call_args[0][0]
+        assert request.compose_file == str(mock_env.compose_file)
+        assert request.services == ("llama",)
+
+    def test_restart_services_uses_service_name_llama(
+        self, mock_env: MagicMock, mock_models: list[ModelEntry]
+    ) -> None:
+        args = Namespace(
+            dry_run=False,
+            skip_download=True,
+            skip_health=True,
+            models_dir=Path("/tmp/models"),
+            hf_token=None,
+            debug=False,
+        )
+        container = _make_mock_container()
+
+        with (
+            patch.object(
+                BootstrapCompositionRoot, "_setup_environment", return_value=mock_env
+            ),
+            patch.object(
+                BootstrapCompositionRoot,
+                "_load_models_config",
+                return_value=mock_models,
+            ),
+        ):
+            root = BootstrapCompositionRoot(container)
+            root.run(args)
+
+        execute_call = container.restart_services.return_value.execute
+        execute_call.assert_called_once()
+        request = execute_call.call_args[0][0]
+        assert request.compose_file == str(mock_env.compose_file)
+        assert request.services == ("llama",)
+
     def test_catches_unexpected_exception(self, mock_env: MagicMock) -> None:
         args = Namespace(
             dry_run=False,
