@@ -152,3 +152,36 @@ class TestHuggingFaceModelDownloader:
         downloader = HuggingFaceModelDownloader(logger)
         result = downloader.download("bad", "bad.gguf", "", tmp_path)
         assert result is False
+
+    def test_download_fallback_on_hf_transfer_failure(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import sys
+        import os
+        from unittest.mock import MagicMock, patch
+
+        mock_hf_transfer = MagicMock()
+        monkeypatch.setitem(sys.modules, "hf_transfer", mock_hf_transfer)
+
+        logger = make_logger_mock()
+        downloader = HuggingFaceModelDownloader(logger)
+
+        calls = []
+        def side_effect(*args: object, **kwargs: object) -> Path:
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise RuntimeError("receiver dropped")
+            
+            dest_file = tmp_path / "model.gguf"
+            dest_file.write_text("fixture-data")
+            return dest_file
+
+        with patch("huggingface_hub.hf_hub_download", side_effect=side_effect):
+            result = downloader.download(
+                "test",
+                "model.gguf",
+                "https://huggingface.co/Qwen/Qwen2.5-Coder-7B/resolve/main/qwen-7b.gguf",
+                tmp_path,
+            )
+            assert result is True
+            assert len(calls) == 2
+            assert os.environ.get("HF_HUB_ENABLE_HF_TRANSFER") == "0"
+

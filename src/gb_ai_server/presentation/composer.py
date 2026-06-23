@@ -53,6 +53,7 @@ class BootstrapCompositionRoot:
 
     def _setup_environment(self, args: Namespace) -> Environment:
         env = Environment.from_env()
+        env.load_env_file(env.env_file)
         if args.debug:
             env.debug = True
         if args.hf_token:
@@ -84,14 +85,15 @@ class BootstrapCompositionRoot:
             self._presenter.skipping_download()
             return
 
-        downloader = HuggingFaceModelDownloader(self._di.logger)
+        hf_token = args.hf_token or os.getenv("HF_TOKEN")
+        downloader = HuggingFaceModelDownloader(self._di.logger, token=hf_token)
         service = self._di.model_downloader(downloader)
         response = service.execute(
             DownloadModelsRequest(
                 entries=[(m.display_name, m.filename, m.url) for m in models],
                 destination_dir=str(args.models_dir),
                 skip_existing=True,
-                token=args.hf_token,
+                token=hf_token,
             )
         )
         if not any(response.results.values()):
@@ -103,7 +105,7 @@ class BootstrapCompositionRoot:
         if not service.execute(
             StartServicesRequest(
                 compose_file=str(env.compose_file),
-                services=("llama-coder",),
+                services=("llama",),
             )
         ).success:
             self._presenter.start_services_failed()
@@ -132,7 +134,7 @@ class BootstrapCompositionRoot:
         if not service.execute(
             RestartServicesRequest(
                 compose_file=str(env.compose_file),
-                services=("llama-coder",),
+                services=("llama",),
             )
         ).success:
             self._presenter.restart_failed()
