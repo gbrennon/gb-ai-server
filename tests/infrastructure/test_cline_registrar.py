@@ -44,22 +44,22 @@ class TestClineModelRegistrar:
         state_file = cline_data / "globalState.json"
         assert state_file.exists()
         data = json.loads(state_file.read_text())
-        # camelCase keys - model ID is now provider-prefixed (e.g., "llama-coder/a.gguf")
+        # camelCase keys - model ID is non-prefixed (like ollama provider)
         assert data["apiProvider"] == "llama-coder"
         assert data["actModeApiProvider"] == "llama-coder"
         assert data["planModeApiProvider"] == "llama-coder"
-        assert data["openAiModelId"] == "llama-coder/a.gguf"
-        assert data["actModeOpenAiModelId"] == "llama-coder/a.gguf"
-        assert data["planModeOpenAiModelId"] == "llama-coder/a.gguf"
+        assert data["openAiModelId"] == "a.gguf"
+        assert data["actModeOpenAiModelId"] == "a.gguf"
+        assert data["planModeOpenAiModelId"] == "a.gguf"
         assert data["openAiBaseUrl"] == "http://localhost:8081/v1"
 
         # kebab-case keys
         assert data["api-provider"] == "llama-coder"
         assert data["act-mode-api-provider"] =="llama-coder"
         assert data["plan-mode-api-provider"] == "llama-coder"
-        assert data["open-ai-model-id"] == "llama-coder/a.gguf"
-        assert data["act-mode-open-ai-model-id"] == "llama-coder/a.gguf"
-        assert data["plan-mode-open-ai-model-id"] == "llama-coder/a.gguf"
+        assert data["open-ai-model-id"] == "a.gguf"
+        assert data["act-mode-open-ai-model-id"] == "a.gguf"
+        assert data["plan-mode-open-ai-model-id"] == "a.gguf"
         assert data["open-ai-base-url"] == "http://localhost:8081/v1"
 
     def test_uses_provider_base_url(self, tmp_path: Path) -> None:
@@ -124,8 +124,8 @@ class TestClineModelRegistrar:
         )
 
         # is_registered accepts both provider-prefixed and non-prefixed model names
-        assert registrar.is_registered("llama-coder/a.gguf") is True
         assert registrar.is_registered("a.gguf") is True
+        assert registrar.is_registered("llama-coder/a.gguf") is True
         assert registrar.is_registered("nonexistent") is False
 
     def test_first_model_port_as_default_base_url(self, tmp_path: Path) -> None:
@@ -174,15 +174,20 @@ class TestClineModelRegistrar:
         assert models_file.exists()
         data = json.loads(models_file.read_text())
         assert "llama-coder" in data["providers"]
-        # defaultModelId is now provider-prefixed
-        assert data["providers"]["llama-coder"]["provider"]["defaultModelId"] == "llama-coder/a.gguf"
-        # models dict keys are provider-prefixed
-        assert "llama-coder/a.gguf" in data["providers"]["llama-coder"]["models"]
-        assert data["providers"]["llama-coder"]["models"]["llama-coder/a.gguf"]["contextWindow"] == 8192
-        assert "tools" in data["providers"]["llama-coder"]["models"]["llama-coder/a.gguf"]["capabilities"]
+        # defaultModelId is non-prefixed (like ollama provider)
+        assert data["providers"]["llama-coder"]["provider"]["defaultModelId"] == "a.gguf"
+        # models dict keys are non-prefixed
+        assert "a.gguf" in data["providers"]["llama-coder"]["models"]
+        assert data["providers"]["llama-coder"]["models"]["a.gguf"]["contextWindow"] == 8192
+        assert "tools" in data["providers"]["llama-coder"]["models"]["a.gguf"]["capabilities"]
+        # Check modelsSourceUrl is set
+        assert data["providers"]["llama-coder"]["provider"]["modelsSourceUrl"] == "http://localhost:8081/models"
+        assert data["providers"]["llama-coder"]["provider"]["protocol"] == "openai-chat"
+        assert data["providers"]["llama-coder"]["provider"]["client"] == "openai-compatible"
         assert "llama-qwen3" in data["providers"]
-        assert data["providers"]["llama-qwen3"]["provider"]["defaultModelId"] == "llama-qwen3/b.gguf"
-        assert "llama-qwen3/b.gguf" in data["providers"]["llama-qwen3"]["models"]
-        assert data["providers"]["llama-qwen3"]["models"]["llama-qwen3/b.gguf"]["contextWindow"] == 8192
+        assert data["providers"]["llama-qwen3"]["provider"]["defaultModelId"] == "b.gguf"
+        assert "b.gguf" in data["providers"]["llama-qwen3"]["models"]
+        assert data["providers"]["llama-qwen3"]["models"]["b.gguf"]["contextWindow"] == 8192
+        assert data["providers"]["llama-qwen3"]["provider"]["modelsSourceUrl"] == "http://localhost:8082/models"
         assert "openai-compatible" in data["providers"]
         assert "openai-native" in data["providers"]

@@ -51,9 +51,8 @@ class ClineModelRegistrar:
 
             first_display_name, first_filename, first_port, first_container = models[0]
             first_base_url = provider_base_url or f"http://localhost:{first_port}"
-            # Use provider-prefixed model ID for global state (e.g., "llama-coder/model.gguf")
-            first_model_id = f"{first_container}/{first_filename}"
-            self._update_global_state(first_display_name, first_model_id, first_base_url, first_container)
+            # Use non-prefixed model ID for global state (like ollama provider)
+            self._update_global_state(first_display_name, first_filename, first_base_url, first_container)
 
             self.logger.ok(
                 f"Registered {len(models)} model(s) with Cline"
@@ -81,13 +80,13 @@ class ClineModelRegistrar:
                 or data.get("open-ai-model-id")
             )
             # Check if provider is a llama container (starts with "llama-")
-            # Model ID in state is provider-prefixed (e.g., "llama-coder/model.gguf")
+            # Model ID in state is non-prefixed (like ollama provider)
             # Accept both prefixed and non-prefixed model names for backward compatibility
             if model_id == model_name:
                 return True
-            # Check if model_name matches the suffix after provider prefix
-            if provider and provider.startswith("llama-") and model_id.startswith(f"{provider}/"):
-                return model_id == f"{provider}/{model_name}" or model_id.endswith(f"/{model_name}")
+            # Check if model_name is provider-prefixed and matches
+            if provider and provider.startswith("llama-") and model_name.startswith(f"{provider}/"):
+                return model_id == model_name.removeprefix(f"{provider}/")
             return provider is not None and provider.startswith("llama-") and model_id == model_name
         except Exception:
             return False
@@ -215,12 +214,11 @@ class ClineModelRegistrar:
                 if key.startswith("local llama") or key.startswith("local-llama"):
                     data["providers"].pop(key, None)
 
-        # Build all models dict with provider-prefixed IDs (e.g., "llama-coder/model.gguf")
+        # Build all models dict with non-prefixed IDs (e.g., "model.gguf") like ollama provider
         all_models: dict[str, dict] = {}
         for display_name, filename, port, container_name in models:
-            model_id = f"{container_name}/{filename}"
-            all_models[model_id] = {
-                "id": model_id,
+            all_models[filename] = {
+                "id": filename,
                 "name": filename,
                 "contextWindow": 8192,
                 "maxInputTokens": 8192,
@@ -235,13 +233,17 @@ class ClineModelRegistrar:
             # Use container name for provider ID (e.g., "llama-coder", "llama-qwen3")
             provider_id = container_name
             base_url = provider_base_url or f"http://localhost:{port}"
-            default_model_id = f"{container_name}/{filename}"
+            default_model_id = filename  # Non-prefixed like ollama provider
 
             data["providers"][provider_id] = {
                 "provider": {
                     "name": provider_id,
                     "baseUrl": f"{base_url}/v1",
                     "defaultModelId": default_model_id,
+                    "protocol": "openai-chat",
+                    "client": "openai-compatible",
+                    # llama.cpp has /models endpoint for model discovery
+                    "modelsSourceUrl": f"{base_url}/models",
                 },
                 "models": all_models.copy()
             }
@@ -252,6 +254,9 @@ class ClineModelRegistrar:
                     "name": "OpenAI Compatible" if idx == 0 else "OpenAI Native",
                     "baseUrl": f"{base_url}/v1",
                     "defaultModelId": default_model_id,
+                    "protocol": "openai-chat",
+                    "client": "openai-compatible",
+                    "modelsSourceUrl": f"{base_url}/models",
                 },
                 "models": all_models.copy()
             }
