@@ -114,7 +114,7 @@ class ClineModelRegistrar:
             base_url = provider_base_url or f"http://localhost:{port}"
 
             if idx == 0:
-                data["lastUsedProvider"] = provider_id
+                data["lastUsedProvider"] = "openai-compatible"
             elif idx == 1:
                 data["lastUsedProvider"] = "openai-native"
 
@@ -266,16 +266,17 @@ class ClineModelRegistrar:
             or current_provider == "openai-compatible"
             or current_provider == "openai-native"
             or current_provider == "local llama"
+            or current_provider == "local-llama"
             or current_provider.startswith("llama-")
         )
 
         if is_local_provider:
-            data["apiProvider"] = custom_provider_id
-            data["actModeApiProvider"] = custom_provider_id
-            data["planModeApiProvider"] = custom_provider_id
-            data["api-provider"] = custom_provider_id
-            data["act-mode-api-provider"] = custom_provider_id
-            data["plan-mode-api-provider"] = custom_provider_id
+            data["apiProvider"] = "openai-compatible"
+            data["actModeApiProvider"] = "openai-compatible"
+            data["planModeApiProvider"] = "openai-compatible"
+            data["api-provider"] = "openai-compatible"
+            data["act-mode-api-provider"] = "openai-compatible"
+            data["plan-mode-api-provider"] = "openai-compatible"
 
             data["openAiModelId"] = first_filename
             data["actModeOpenAiModelId"] = first_filename
