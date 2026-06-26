@@ -1,6 +1,5 @@
 """Outbound port - model registrar interface."""
 
-from pathlib import Path
 from typing import Protocol
 
 
