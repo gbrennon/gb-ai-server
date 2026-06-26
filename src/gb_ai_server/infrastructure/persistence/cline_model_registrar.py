@@ -125,8 +125,9 @@ class ClineModelRegistrar:
                     "model": filename,
                     "baseUrl": f"{base_url}/v1",
                     "apiKey": "dummy",
+                    "timeout": 30000,
                     "reasoning": {
-                        "enabled": False,
+                        "budgetTokens": 1024,
                     },
                 },
                 "updatedAt": now,
@@ -155,8 +156,9 @@ class ClineModelRegistrar:
                         "model": filename,
                         "baseUrl": f"{base_url}/v1",
                         "apiKey": "dummy",
+                        "timeout": 30000,
                         "reasoning": {
-                            "enabled": False,
+                            "budgetTokens": 1024,
                         },
                     },
                     "updatedAt": now,
