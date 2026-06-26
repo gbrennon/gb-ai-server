@@ -114,7 +114,9 @@ class ClineModelRegistrar:
             base_url = provider_base_url or f"http://localhost:{port}"
 
             if idx == 0:
-                data["lastUsedProvider"] = provider_id
+                data["lastUsedProvider"] = "openai-compatible"
+            elif idx == 1:
+                data["lastUsedProvider"] = "openai-native"
 
             # Register the custom provider ID with container name
             data["providers"][provider_id] = {
