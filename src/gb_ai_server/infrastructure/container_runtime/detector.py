@@ -1,12 +1,8 @@
 """Detect available container runtime."""
 
 from ...application.ports.outbound.runtime_detector import RuntimeDetection
-from .podman_runtime import PodmanRuntime
-from .podman_inspector import PodmanInspector
-from .podman_operator import PodmanOperator
-from .docker_runtime import DockerRuntime
-from .docker_inspector import DockerInspector
-from .docker_operator import DockerOperator
+from ..podman import PodmanRuntime, PodmanInspector, PodmanOperator
+from ..docker import DockerRuntime, DockerInspector, DockerOperator
 
 
 class FallbackRuntimeDetector:
