@@ -15,7 +15,7 @@ class ClineModelRegistrar:
 
     Writes to:
       - ~/.cline/data/settings/providers.json  — provider entries with base URLs
-      - ~/.cline/data/globalState.json          — active provider and model
+      - ~/.cline/data/settings/models.json     — provider models catalog
     """
 
     def __init__(
@@ -48,11 +48,6 @@ class ClineModelRegistrar:
             self._update_providers(models, provider_base_url)
             self._update_models(models, provider_base_url)
 
-            first_display_name, first_filename, first_port, first_container = models[0]
-            first_base_url = provider_base_url or f"http://localhost:{first_port}"
-            # Use non-prefixed model ID for global state (like ollama provider)
-            self._update_global_state(first_display_name, first_filename, first_base_url, first_container)
-
             self.logger.ok(
                 f"Registered {len(models)} model(s) with Cline"
             )
@@ -78,12 +73,8 @@ class ClineModelRegistrar:
                 or data.get("openAiModelId")
                 or data.get("open-ai-model-id")
             )
-            # Check if provider is a llama container (starts with "llama-")
-            # Model ID in state is non-prefixed (like ollama provider)
-            # Accept both prefixed and non-prefixed model names for backward compatibility
             if model_id == model_name:
                 return True
-            # Check if model_name is provider-prefixed and matches
             if provider and provider.startswith("llama-") and model_name.startswith(f"{provider}/"):
                 return model_id == model_name.removeprefix(f"{provider}/")
             return provider is not None and provider.startswith("llama-") and model_id == model_name
@@ -138,53 +129,7 @@ class ClineModelRegistrar:
                 "tokenSource": "migration",
             }
 
-            # Register the corresponding built-in CLI compatibility provider ID
-            cli_provider_id = "openai-compatible" if idx == 0 else "openai-native"
-            data["providers"][cli_provider_id] = {
-                "settings": {
-                    "provider": cli_provider_id,
-                    "model": filename,
-                    "baseUrl": f"{base_url}/v1",
-                    "apiKey": "dummy",
-                    "reasoning": {
-                        "enabled": False,
-                    },
-                },
-                "updatedAt": now,
-                "tokenSource": "migration",
-            }
-
         self._providers_file.write_text(json.dumps(data, indent=2) + "\n")
-
-    def _update_global_state(self, display_name: str, model_name: str, base_url: str, container_name: str) -> None:
-        data: dict = {}
-        if self._state_file.exists():
-            try:
-                data = json.loads(self._state_file.read_text())
-            except json.JSONDecodeError:
-                data = {}
-
-        provider_id = container_name
-
-        # Set camelCase keys
-        data["apiProvider"] = provider_id
-        data["actModeApiProvider"] = provider_id
-        data["planModeApiProvider"] = provider_id
-        data["openAiModelId"] = model_name
-        data["actModeOpenAiModelId"] = model_name
-        data["planModeOpenAiModelId"] = model_name
-        data["openAiBaseUrl"] = f"{base_url}/v1"
-
-        # Set kebab-case keys for CLI compatibility
-        data["api-provider"] = provider_id
-        data["act-mode-api-provider"] = provider_id
-        data["plan-mode-api-provider"] = provider_id
-        data["open-ai-model-id"] = model_name
-        data["act-mode-open-ai-model-id"] = model_name
-        data["plan-mode-open-ai-model-id"] = model_name
-        data["open-ai-base-url"] = f"{base_url}/v1"
-
-        self._state_file.write_text(json.dumps(data, indent=2) + "\n")
 
     def _update_models(
         self,
@@ -242,19 +187,6 @@ class ClineModelRegistrar:
                     "protocol": "openai-chat",
                     "client": "openai-compatible",
                     # llama.cpp has /models endpoint for model discovery
-                    "modelsSourceUrl": f"{base_url}/models",
-                },
-                "models": all_models.copy()
-            }
-
-            cli_provider_id = "openai-compatible" if idx == 0 else "openai-native"
-            data["providers"][cli_provider_id] = {
-                "provider": {
-                    "name": "OpenAI Compatible" if idx == 0 else "OpenAI Native",
-                    "baseUrl": f"{base_url}/v1",
-                    "defaultModelId": default_model_id,
-                    "protocol": "openai-chat",
-                    "client": "openai-compatible",
                     "modelsSourceUrl": f"{base_url}/models",
                 },
                 "models": all_models.copy()
