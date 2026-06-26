@@ -16,6 +16,7 @@ class ClineModelRegistrar:
     Writes to:
       - ~/.cline/data/settings/providers.json  — provider entries with base URLs
       - ~/.cline/data/settings/models.json     — provider models catalog
+      - ~/.cline/data/globalState.json          — provider model mappings
     """
 
     def __init__(
@@ -47,6 +48,7 @@ class ClineModelRegistrar:
         try:
             self._update_providers(models, provider_base_url)
             self._update_models(models, provider_base_url)
+            self._update_global_state(models)
 
             self.logger.ok(
                 f"Registered {len(models)} model(s) with Cline"
@@ -207,3 +209,51 @@ class ClineModelRegistrar:
             }
 
         self._models_file.write_text(json.dumps(data, indent=2) + "\n")
+
+    def _update_global_state(self, models: list[tuple[str, str, int, str]]) -> None:
+        data: dict = {}
+        if self._state_file.exists():
+            try:
+                data = json.loads(self._state_file.read_text())
+            except json.JSONDecodeError:
+                data = {}
+
+        for idx, (display_name, filename, port, container_name) in enumerate(models):
+            provider_ids = [container_name]
+            if idx == 0:
+                provider_ids.append("openai-compatible")
+            else:
+                provider_ids.append("openai-native")
+
+            for pid in provider_ids:
+                # Kebab case keys
+                data[f"{pid}-model-id"] = filename
+                data[f"act-mode-{pid}-model-id"] = filename
+                data[f"plan-mode-{pid}-model-id"] = filename
+
+                # Camel case keys
+                cc_pid = self._to_camel_case(pid)
+                data[f"{cc_pid}ModelId"] = filename
+                data[f"actMode{self._capitalize_first(cc_pid)}ModelId"] = filename
+                data[f"planMode{self._capitalize_first(cc_pid)}ModelId"] = filename
+
+        self._state_file.write_text(json.dumps(data, indent=2) + "\n")
+
+    def _to_camel_case(self, s: str) -> str:
+        parts = s.split("-")
+        processed_parts = []
+        for p in parts:
+            if p == "openai":
+                processed_parts.append("openAi")
+            else:
+                processed_parts.append(p)
+
+        res = processed_parts[0]
+        for p in processed_parts[1:]:
+            res += p.capitalize()
+        return res
+
+    def _capitalize_first(self, s: str) -> str:
+        if not s:
+            return s
+        return s[0].upper() + s[1:]
