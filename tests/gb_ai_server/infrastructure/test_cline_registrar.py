@@ -31,6 +31,36 @@ class TestClineModelRegistrar:
         assert provider["settings"]["provider"] == "llama-coder"
         assert "openai-compatible" not in data["providers"]
 
+    def test_updates_global_state_without_overwriting_provider(self, tmp_path: Path) -> None:
+        logger = make_logger_mock()
+        cline_data = tmp_path / "cline" / "data"
+        cline_data.mkdir(parents=True, exist_ok=True)
+        state_file = cline_data / "globalState.json"
+        state_file.write_text(
+            json.dumps({
+                "apiProvider": "cline",
+                "actModeApiProvider": "cline",
+            })
+        )
+
+        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
+        registrar.register_models(
+            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        )
+
+        data = json.loads(state_file.read_text())
+        # The active provider must NOT be changed to llama-coder
+        assert data["apiProvider"] == "cline"
+        assert data["actModeApiProvider"] == "cline"
+
+        # The model ID keys for llama-coder and openai-compatible MUST be set
+        assert data["llamaCoderModelId"] == "a.gguf"
+        assert data["actModeLlamaCoderModelId"] == "a.gguf"
+        assert data["planModeLlamaCoderModelId"] == "a.gguf"
+        assert data["openAiCompatibleModelId"] == "a.gguf"
+        assert data["actModeOpenAiCompatibleModelId"] == "a.gguf"
+        assert data["planModeOpenAiCompatibleModelId"] == "a.gguf"
+
     def test_uses_provider_base_url(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
         cline_data = tmp_path / "cline" / "data"
