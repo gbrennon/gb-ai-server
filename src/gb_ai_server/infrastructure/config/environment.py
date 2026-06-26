@@ -4,6 +4,8 @@ from pathlib import Path
 from dataclasses import dataclass
 import os
 
+from .paths import EnvironmentPaths
+
 
 @dataclass
 class Environment:
@@ -46,17 +48,5 @@ class Environment:
                     os.environ[key.strip()] = value.strip()
 
     @property
-    def scripts_lib_dir(self) -> Path:
-        return self.repo_root / "scripts" / "lib"
-
-    @property
-    def models_config_path(self) -> Path:
-        return self.repo_root / "scripts" / "models.conf.sh"
-
-    @property
-    def compose_file(self) -> Path:
-        return self.repo_root / "docker-compose.yml"
-
-    @property
-    def env_file(self) -> Path:
-        return self.repo_root / ".env"
+    def paths(self) -> EnvironmentPaths:
+        return EnvironmentPaths(self.repo_root)
