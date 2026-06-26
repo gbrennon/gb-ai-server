@@ -2,12 +2,12 @@
 
 from pathlib import Path
 
-from gb_ai_server.infrastructure.container_runtime.podman_runtime import PodmanRuntime
-from gb_ai_server.infrastructure.container_runtime.podman_inspector import PodmanInspector
-from gb_ai_server.infrastructure.container_runtime.podman_operator import PodmanOperator
-from gb_ai_server.infrastructure.container_runtime.docker_runtime import DockerRuntime
-from gb_ai_server.infrastructure.container_runtime.docker_inspector import DockerInspector
-from gb_ai_server.infrastructure.container_runtime.docker_operator import DockerOperator
+from gb_ai_server.infrastructure.podman import PodmanRuntime
+from gb_ai_server.infrastructure.podman import PodmanInspector
+from gb_ai_server.infrastructure.podman import PodmanOperator
+from gb_ai_server.infrastructure.docker import DockerRuntime
+from gb_ai_server.infrastructure.docker import DockerInspector
+from gb_ai_server.infrastructure.docker import DockerOperator
 from tests.gb_ai_server.helpers import make_script
 
 
