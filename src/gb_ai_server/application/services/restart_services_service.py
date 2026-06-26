@@ -3,21 +3,26 @@
 from pathlib import Path
 
 from ..ports.outbound.logger import Logger
-from ..ports.outbound import ComposeTool
+from ..ports.outbound import ComposeLifecycle
 from ..dtos.requests.restart_services_request import RestartServicesRequest
 from ..dtos.responses.restart_services_response import RestartServicesResponse
+from ..utils import print_section
 
 
 class RestartServicesService:
     """Restart services using compose tool."""
 
-    def __init__(self, logger: Logger, compose_tool: ComposeTool) -> None:
+    def __init__(self, logger: Logger, compose_lifecycle: ComposeLifecycle | None = None) -> None:
         self.logger = logger
-        self.compose_tool = compose_tool
+        self.compose_lifecycle = compose_lifecycle
 
     def execute(self, request: RestartServicesRequest) -> RestartServicesResponse:
-        self.logger.section("Restarting Services")
-        result = self.compose_tool.restart(
+        if not self.compose_lifecycle:
+            self.logger.error("Compose lifecycle operator is not available. Cannot restart services.")
+            return RestartServicesResponse(False)
+
+        print_section("Restarting Services")
+        result = self.compose_lifecycle.restart(
             Path(request.compose_file),
             *request.services,
         )
