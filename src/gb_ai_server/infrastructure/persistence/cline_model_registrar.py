@@ -140,7 +140,12 @@ class ClineModelRegistrar:
             if cli_provider_id in data["providers"]:
                 settings = data["providers"][cli_provider_id].get("settings", {})
                 existing_url = settings.get("baseUrl", "")
-                if existing_url and "localhost" not in existing_url and "127.0.0.1" not in existing_url:
+                if (
+                    existing_url
+                    and "localhost" not in existing_url
+                    and "127.0.0.1" not in existing_url
+                    and "api.openai.com" not in existing_url
+                ):
                     should_write_cli = False
 
             if should_write_cli:
