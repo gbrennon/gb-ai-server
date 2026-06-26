@@ -100,7 +100,7 @@ class ClineModelRegistrar:
         if "providers" not in data:
             data["providers"] = {}
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
         # Remove legacy keys
         if "providers" in data:
