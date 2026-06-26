@@ -2,7 +2,6 @@
 
 from typing import TextIO
 import sys
-import subprocess
 
 from .level import LogLevel
 
@@ -75,10 +74,4 @@ class TerminalLogger:
 
     def error(self, message: str) -> None:
         self._log(LogLevel.ERROR, message, self.stream_err)
-
-    def section(self, title: str) -> None:
-        separator = "\u2500" * (len(title) + 4)
-        print(f"\n{separator}", file=self.stream_out)
-        print(f" {title}", file=self.stream_out)
-        print(f"{separator}", file=self.stream_out)
 
