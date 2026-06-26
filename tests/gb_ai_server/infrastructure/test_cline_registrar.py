@@ -24,11 +24,14 @@ class TestClineModelRegistrar:
         assert providers_file.exists()
         data = json.loads(providers_file.read_text())
         assert data["version"] == 1
-        assert data["lastUsedProvider"] == "openai-compatible"
-        provider = data["providers"]["openai-compatible"]
+        assert data["lastUsedProvider"] == "llama-coder"
+        provider = data["providers"]["llama-coder"]
         assert provider["settings"]["baseUrl"] == "http://localhost:8081/v1"
         assert provider["settings"]["model"] == "a.gguf"
         assert provider["settings"]["provider"] == "openai-compatible"
+        
+        # Check compatibility provider is also written
+        assert "openai-compatible" in data["providers"]
 
     def test_updates_global_state_without_overwriting_provider(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
@@ -60,15 +63,15 @@ class TestClineModelRegistrar:
         assert data["actModeOpenAiCompatibleModelId"] == "a.gguf"
         assert data["planModeOpenAiCompatibleModelId"] == "a.gguf"
 
-    def test_migrates_active_provider_from_llama_coder(self, tmp_path: Path) -> None:
+    def test_sets_active_provider_to_llama_coder(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
         cline_data = tmp_path / "cline" / "data"
         cline_data.mkdir(parents=True, exist_ok=True)
         state_file = cline_data / "globalState.json"
         state_file.write_text(
             json.dumps({
-                "apiProvider": "llama-coder",
-                "actModeApiProvider": "llama-coder",
+                "apiProvider": "openai-compatible",
+                "actModeApiProvider": "openai-compatible",
             })
         )
 
@@ -78,9 +81,9 @@ class TestClineModelRegistrar:
         )
 
         data = json.loads(state_file.read_text())
-        # The active provider must be migrated to openai-compatible
-        assert data["apiProvider"] == "openai-compatible"
-        assert data["actModeApiProvider"] == "openai-compatible"
+        # The active provider must be updated to llama-coder
+        assert data["apiProvider"] == "llama-coder"
+        assert data["actModeApiProvider"] == "llama-coder"
         assert data["openAiModelId"] == "a.gguf"
         assert data["openAiBaseUrl"] == "http://localhost:8081/v1"
 
@@ -261,6 +264,16 @@ class TestClineModelRegistrar:
         models_file = cline_data / "settings" / "models.json"
         assert models_file.exists()
         data = json.loads(models_file.read_text())
+        
+        # Check custom container providers are written
+        assert "llama-coder" in data["providers"]
+        assert data["providers"]["llama-coder"]["provider"]["defaultModelId"] == "a.gguf"
+        assert "a.gguf" in data["providers"]["llama-coder"]["models"]
+        
+        assert "llama-qwen3" in data["providers"]
+        assert data["providers"]["llama-qwen3"]["provider"]["defaultModelId"] == "b.gguf"
+        assert "b.gguf" in data["providers"]["llama-qwen3"]["models"]
+
         assert "openai-compatible" in data["providers"]
         # defaultModelId is non-prefixed (like ollama provider)
         assert data["providers"]["openai-compatible"]["provider"]["defaultModelId"] == "a.gguf"
