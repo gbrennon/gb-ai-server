@@ -164,5 +164,5 @@ class TestClineModelRegistrar:
         assert "b.gguf" in data["providers"]["llama-qwen3"]["models"]
         assert data["providers"]["llama-qwen3"]["models"]["b.gguf"]["contextWindow"] == 8192
         assert data["providers"]["llama-qwen3"]["provider"]["modelsSourceUrl"] == "http://localhost:8082/models"
-        assert "openai-compatible" not in data["providers"]
-        assert "openai-native" not in data["providers"]
+        assert "openai-compatible" in data["providers"]
+        assert "openai-native" in data["providers"]
