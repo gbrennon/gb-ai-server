@@ -5,6 +5,7 @@ from ..ports.outbound.http_client import HttpClient
 from ...domain import HealthCheckStrategy, WaitStrategy
 from ..dtos.requests.verify_health_request import VerifyHealthRequest
 from ..dtos.responses.verify_health_response import VerifyHealthResponse
+from ..utils import print_section
 
 
 class HealthVerifierService:
@@ -15,7 +16,7 @@ class HealthVerifierService:
         self._http_client = http_client
 
     def execute(self, request: VerifyHealthRequest) -> VerifyHealthResponse:
-        self.logger.section("Health Verification")
+        print_section("Health Verification")
 
         strategy = HealthCheckStrategy()
         all_healthy = True
