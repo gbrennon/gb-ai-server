@@ -3,21 +3,26 @@
 from pathlib import Path
 
 from ..ports.outbound.logger import Logger
-from ..ports.outbound import ComposeTool
+from ..ports.outbound import ComposeLifecycle
 from ..dtos.requests.start_services_request import StartServicesRequest
 from ..dtos.responses.start_services_response import StartServicesResponse
+from ..utils import print_section
 
 
 class StartServicesService:
     """Start services using compose tool."""
 
-    def __init__(self, logger: Logger, compose_tool: ComposeTool) -> None:
+    def __init__(self, logger: Logger, compose_lifecycle: ComposeLifecycle | None = None) -> None:
         self.logger = logger
-        self.compose_tool = compose_tool
+        self.compose_lifecycle = compose_lifecycle
 
     def execute(self, request: StartServicesRequest) -> StartServicesResponse:
-        self.logger.section("Starting Services")
-        result = self.compose_tool.up(
+        if not self.compose_lifecycle:
+            self.logger.error("Compose lifecycle operator is not available. Cannot start services.")
+            return StartServicesResponse(False)
+
+        print_section("Starting Services")
+        result = self.compose_lifecycle.up(
             Path(request.compose_file),
             *request.services,
             detach=True,
