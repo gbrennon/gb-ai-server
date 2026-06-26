@@ -29,38 +29,7 @@ class TestClineModelRegistrar:
         assert provider["settings"]["baseUrl"] == "http://localhost:8081/v1"
         assert provider["settings"]["model"] == "a.gguf"
         assert provider["settings"]["provider"] == "llama-coder"
-        assert "openai-compatible" in data["providers"]
-        assert data["providers"]["openai-compatible"]["settings"]["baseUrl"] == "http://localhost:8081/v1"
-
-    def test_updates_global_state(self, tmp_path: Path) -> None:
-        logger = make_logger_mock()
-        cline_data = tmp_path / "cline" / "data"
-        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
-        )
-
-        state_file = cline_data / "globalState.json"
-        assert state_file.exists()
-        data = json.loads(state_file.read_text())
-        # camelCase keys - model ID is non-prefixed (like ollama provider)
-        assert data["apiProvider"] == "llama-coder"
-        assert data["actModeApiProvider"] == "llama-coder"
-        assert data["planModeApiProvider"] == "llama-coder"
-        assert data["openAiModelId"] == "a.gguf"
-        assert data["actModeOpenAiModelId"] == "a.gguf"
-        assert data["planModeOpenAiModelId"] == "a.gguf"
-        assert data["openAiBaseUrl"] == "http://localhost:8081/v1"
-
-        # kebab-case keys
-        assert data["api-provider"] == "llama-coder"
-        assert data["act-mode-api-provider"] =="llama-coder"
-        assert data["plan-mode-api-provider"] == "llama-coder"
-        assert data["open-ai-model-id"] == "a.gguf"
-        assert data["act-mode-open-ai-model-id"] == "a.gguf"
-        assert data["plan-mode-open-ai-model-id"] == "a.gguf"
-        assert data["open-ai-base-url"] == "http://localhost:8081/v1"
+        assert "openai-compatible" not in data["providers"]
 
     def test_uses_provider_base_url(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
@@ -118,10 +87,16 @@ class TestClineModelRegistrar:
     def test_is_registered_checks_state(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
         cline_data = tmp_path / "cline" / "data"
-        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        cline_data.mkdir(parents=True, exist_ok=True)
+        state_file = cline_data / "globalState.json"
+        state_file.write_text(
+            json.dumps({
+                "apiProvider": "llama-coder",
+                "openAiModelId": "a.gguf"
+            })
         )
+
+        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
         # is_registered accepts both provider-prefixed and non-prefixed model names
         assert registrar.is_registered("a.gguf") is True
@@ -144,8 +119,8 @@ class TestClineModelRegistrar:
         assert data["providers"]["llama-qwen3"]["settings"]["baseUrl"] == "http://localhost:8082/v1"
         assert data["providers"]["llama-qwen3"]["settings"]["model"] == "b.gguf"
         assert data["providers"]["llama-qwen3"]["settings"]["provider"] == "llama-qwen3"
-        assert data["providers"]["openai-compatible"]["settings"]["baseUrl"] == "http://localhost:8081/v1"
-        assert data["providers"]["openai-native"]["settings"]["baseUrl"] == "http://localhost:8082/v1"
+        assert "openai-compatible" not in data["providers"]
+        assert "openai-native" not in data["providers"]
 
     def test_uses_CLINE_DATA_DIR_env_var(self, tmp_path: Path, monkeypatch) -> None:
         logger = make_logger_mock()
@@ -189,5 +164,5 @@ class TestClineModelRegistrar:
         assert "b.gguf" in data["providers"]["llama-qwen3"]["models"]
         assert data["providers"]["llama-qwen3"]["models"]["b.gguf"]["contextWindow"] == 8192
         assert data["providers"]["llama-qwen3"]["provider"]["modelsSourceUrl"] == "http://localhost:8082/models"
-        assert "openai-compatible" in data["providers"]
-        assert "openai-native" in data["providers"]
+        assert "openai-compatible" not in data["providers"]
+        assert "openai-native" not in data["providers"]
