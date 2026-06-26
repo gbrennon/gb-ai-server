@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from gb_ai_server.infrastructure.command import Command, CommandResult
-from tests.helpers import make_script
+from tests.gb_ai_server.helpers import make_script
 
 
 class TestCommandRun:

@@ -21,9 +21,16 @@ class TestModelEntryFromString:
         with pytest.raises(ValueError, match="Invalid model entry format"):
             ModelEntry.from_string("only|two")
 
+    def test_parses_five_part_format(self) -> None:
+        entry = ModelEntry.from_string("qwen:7b|qwen.gguf|https://example.com/q|999|8192")
+        assert entry.display_name == "qwen:7b"
+        assert entry.filename == "qwen.gguf"
+        assert entry.n_gpu_layers == 999
+        assert entry.ctx_size == 8192
+
     def test_raises_on_too_many_parts(self) -> None:
         with pytest.raises(ValueError, match="Invalid model entry format"):
-            ModelEntry.from_string("a|b|c|d")
+            ModelEntry.from_string("a|b|c|d|e|f")
 
     def test_raises_on_empty_parts(self) -> None:
         with pytest.raises(ValueError, match="empty fields"):
@@ -44,6 +51,14 @@ class TestModelEntryFromTuple:
         assert entry.display_name == "my-model"
         assert entry.filename == "model.gguf"
         assert entry.url == "https://example.com/m.gguf"
+        assert entry.n_gpu_layers == 999
+        assert entry.ctx_size == 8192
+
+    def test_from_five_tuple(self) -> None:
+        entry = ModelEntry.from_tuple(("m", "f.gguf", "https://example.com/f", 50, 4096))
+        assert entry.display_name == "m"
+        assert entry.n_gpu_layers == 50
+        assert entry.ctx_size == 4096
 
 
 class TestModelEntryStr:

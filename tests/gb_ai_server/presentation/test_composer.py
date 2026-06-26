@@ -10,11 +10,25 @@ from gb_ai_server.domain import CommandResult, ModelEntry
 from gb_ai_server.presentation.composer import BootstrapCompositionRoot
 
 
+def _default_args(**overrides) -> Namespace:
+    base = {
+        "dry_run": False,
+        "skip_download": False,
+        "skip_health": False,
+        "models_dir": Path("/tmp/models"),
+        "hf_token": None,
+        "debug": False,
+        "model": None,
+    }
+    base.update(overrides)
+    return Namespace(**base)
+
+
 @pytest.fixture
 def mock_env() -> MagicMock:
     env = MagicMock()
-    env.compose_file = Path("/tmp/compose.yml")
-    env.models_config_path = Path("/tmp/models.conf.sh")
+    env.paths.compose_file = Path("/tmp/compose.yml")
+    env.paths.models_config_path = Path("/tmp/models.conf.sh")
     env.debug = False
     return env
 
@@ -59,23 +73,34 @@ def _make_mock_container(
     container = MagicMock()
     container.logger = MagicMock()
 
-    verifier = MagicMock()
-    verifier.execute.return_value = (
-        verifier_result
-        if verifier_result is not None
-        else CommandResult(returncode=0, stdout="", stderr="", success=True)
-    )
+    result = verifier_result if verifier_result is not None else MagicMock()
+    if verifier_result is None:
+        result.success = True
+
     if verifier_has_tools:
-        verifier.compose_tool = MagicMock()
-        verifier.container_runtime = MagicMock()
+        result.compose_tool = MagicMock()
+        result.container_runtime = MagicMock()
+        result.container_runtime.is_running.return_value = False
+        result.inspector = MagicMock()
+        result.operator = MagicMock()
+        result.compose_lifecycle = MagicMock()
+        result.compose_query = MagicMock()
     else:
-        verifier.compose_tool = None
-        verifier.container_runtime = None
+        result.compose_tool = None
+        result.container_runtime = None
+        result.inspector = None
+        result.operator = None
+        result.compose_lifecycle = None
+        result.compose_query = None
+
+    verifier = MagicMock()
+    verifier.execute.return_value = result
     container.prerequisite_verifier.return_value = verifier
 
     container.start_services.return_value = _make_mock_service(
         start_result if start_result is not None else None
     )
+    container.stop_services.return_value = _make_mock_service(None)
     container.restart_services.return_value = _make_mock_service(
         restart_result if restart_result is not None else None
     )
@@ -97,14 +122,7 @@ class TestBootstrapCompositionRoot:
     def test_happy_path_returns_zero(
         self, mock_env: MagicMock, mock_models: list[ModelEntry]
     ) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=False,
-            skip_health=False,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args()
         container = _make_mock_container()
 
         with patch.object(
@@ -121,14 +139,7 @@ class TestBootstrapCompositionRoot:
     def test_returns_one_when_no_models(
         self, mock_env: MagicMock
     ) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=True,
-            skip_health=True,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args(skip_download=True, skip_health=True)
         container = _make_mock_container()
 
         with patch.object(
@@ -145,14 +156,7 @@ class TestBootstrapCompositionRoot:
     def test_returns_one_when_prerequisites_fail(
         self, mock_env: MagicMock, mock_models: list[ModelEntry]
     ) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=True,
-            skip_health=True,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args(skip_download=True, skip_health=True)
         container = _make_mock_container(
             verifier_result=CommandResult(
                 returncode=1, stdout="", stderr="fail", success=False
@@ -173,14 +177,7 @@ class TestBootstrapCompositionRoot:
     def test_returns_one_when_detection_fails(
         self, mock_env: MagicMock, mock_models: list[ModelEntry]
     ) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=True,
-            skip_health=True,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args(skip_download=True, skip_health=True)
         container = _make_mock_container(verifier_has_tools=False)
 
         with patch.object(
@@ -197,14 +194,7 @@ class TestBootstrapCompositionRoot:
     def test_skip_download_skips_download_step(
         self, mock_env: MagicMock, mock_models: list[ModelEntry]
     ) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=True,
-            skip_health=True,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args(skip_download=True, skip_health=True)
         container = _make_mock_container()
 
         with patch.object(
@@ -222,14 +212,7 @@ class TestBootstrapCompositionRoot:
     def test_skip_health_skips_health_step(
         self, mock_env: MagicMock, mock_models: list[ModelEntry]
     ) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=True,
-            skip_health=True,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args(skip_download=True, skip_health=True)
         container = _make_mock_container()
 
         with patch.object(
@@ -247,14 +230,7 @@ class TestBootstrapCompositionRoot:
     def test_returns_one_when_start_fails(
         self, mock_env: MagicMock, mock_models: list[ModelEntry]
     ) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=True,
-            skip_health=True,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args(skip_download=True, skip_health=True)
         container = _make_mock_container(
             start_result=CommandResult(
                 returncode=1, stdout="", stderr="fail", success=False
@@ -275,14 +251,7 @@ class TestBootstrapCompositionRoot:
     def test_returns_one_when_restart_fails(
         self, mock_env: MagicMock, mock_models: list[ModelEntry]
     ) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=True,
-            skip_health=True,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args(skip_download=True, skip_health=True)
         container = _make_mock_container(
             restart_result=CommandResult(
                 returncode=1, stdout="", stderr="fail", success=False
@@ -303,14 +272,7 @@ class TestBootstrapCompositionRoot:
     def test_returns_one_when_health_fails(
         self, mock_env: MagicMock, mock_models: list[ModelEntry]
     ) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=True,
-            skip_health=False,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args(skip_download=True, skip_health=False)
         container = _make_mock_container(
             health_result=CommandResult(
                 returncode=1, stdout="", stderr="fail", success=False
@@ -331,14 +293,7 @@ class TestBootstrapCompositionRoot:
     def test_start_services_uses_service_name_llama(
         self, mock_env: MagicMock, mock_models: list[ModelEntry]
     ) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=True,
-            skip_health=True,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args(skip_download=True, skip_health=True)
         container = _make_mock_container()
 
         with (
@@ -357,20 +312,13 @@ class TestBootstrapCompositionRoot:
         execute_call = container.start_services.return_value.execute
         execute_call.assert_called_once()
         request = execute_call.call_args[0][0]
-        assert request.compose_file == str(mock_env.compose_file)
+        assert request.compose_file == str(mock_env.paths.compose_file)
         assert request.services == ("llama",)
 
     def test_restart_services_uses_service_name_llama(
         self, mock_env: MagicMock, mock_models: list[ModelEntry]
     ) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=True,
-            skip_health=True,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args(skip_download=True, skip_health=True)
         container = _make_mock_container()
 
         with (
@@ -389,18 +337,11 @@ class TestBootstrapCompositionRoot:
         execute_call = container.restart_services.return_value.execute
         execute_call.assert_called_once()
         request = execute_call.call_args[0][0]
-        assert request.compose_file == str(mock_env.compose_file)
+        assert request.compose_file == str(mock_env.paths.compose_file)
         assert request.services == ("llama",)
 
     def test_catches_unexpected_exception(self, mock_env: MagicMock) -> None:
-        args = Namespace(
-            dry_run=False,
-            skip_download=True,
-            skip_health=True,
-            models_dir=Path("/tmp/models"),
-            hf_token=None,
-            debug=False,
-        )
+        args = _default_args(skip_download=True, skip_health=True)
         container = _make_mock_container()
 
         with patch.object(

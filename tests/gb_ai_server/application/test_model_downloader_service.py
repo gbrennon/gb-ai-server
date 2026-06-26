@@ -2,7 +2,7 @@
 
 from gb_ai_server.application.services import ModelDownloaderService
 from gb_ai_server.application.dtos.requests import DownloadModelsRequest
-from tests.conftest import make_logger_mock, make_model_downloader_mock
+from tests.gb_ai_server.conftest import make_logger_mock, make_model_downloader_mock
 
 
 class TestModelDownloaderService:

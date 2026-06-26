@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from gb_ai_server.application.services import HealthVerifierService
 from gb_ai_server.application.dtos.requests import VerifyHealthRequest
-from tests.conftest import make_logger_mock, make_http_client_mock
+from tests.gb_ai_server.conftest import make_logger_mock, make_http_client_mock
 
 
 class TestHealthVerifierService:

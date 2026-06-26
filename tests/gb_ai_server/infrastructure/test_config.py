@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from gb_ai_server.infrastructure.config import Environment
+from gb_ai_server.infrastructure.config import Environment, EnvironmentPaths
 
 
 class TestEnvironment:
@@ -27,31 +27,31 @@ class TestEnvironment:
         env = Environment.from_env()
         assert env.debug is False
 
+
+class TestEnvironmentPaths:
     def test_compose_file(self) -> None:
-        env = Environment.from_env(repo_root=Path("/tmp/test-repo"))
-        assert str(env.compose_file) == "/tmp/test-repo/docker-compose.yml"
+        paths = EnvironmentPaths(Path("/tmp/test-repo"))
+        assert str(paths.compose_file) == "/tmp/test-repo/docker-compose.yml"
 
     def test_models_config_path(self) -> None:
-        env = Environment.from_env(repo_root=Path("/tmp/test-repo"))
-        assert str(env.models_config_path) == "/tmp/test-repo/scripts/models.conf.sh"
+        paths = EnvironmentPaths(Path("/tmp/test-repo"))
+        assert str(paths.models_config_path) == "/tmp/test-repo/scripts/models.conf.sh"
 
     def test_scripts_lib_dir(self) -> None:
-        env = Environment.from_env(repo_root=Path("/tmp/test-repo"))
-        assert str(env.scripts_lib_dir) == "/tmp/test-repo/scripts/lib"
+        paths = EnvironmentPaths(Path("/tmp/test-repo"))
+        assert str(paths.scripts_lib_dir) == "/tmp/test-repo/scripts/lib"
 
     def test_env_file(self) -> None:
-        env = Environment.from_env(repo_root=Path("/tmp/test-repo"))
-        assert str(env.env_file) == "/tmp/test-repo/.env"
+        paths = EnvironmentPaths(Path("/tmp/test-repo"))
+        assert str(paths.env_file) == "/tmp/test-repo/.env"
 
-
-class TestEnvironmentEdgeCases:
-    def test_scripts_lib_dir(self) -> None:
+    def test_paths_property(self) -> None:
         env = Environment.from_env(repo_root=Path("/tmp/test-repo"))
-        assert str(env.scripts_lib_dir) == "/tmp/test-repo/scripts/lib"
+        assert str(env.paths.scripts_lib_dir) == "/tmp/test-repo/scripts/lib"
 
-    def test_env_file(self) -> None:
+    def test_env_file_paths_property(self) -> None:
         env = Environment.from_env(repo_root=Path("/tmp/test-repo"))
-        assert str(env.env_file) == "/tmp/test-repo/.env"
+        assert str(env.paths.env_file) == "/tmp/test-repo/.env"
 
     def test_load_env_file_skips_comments(self, tmp_path: Path) -> None:
         import os

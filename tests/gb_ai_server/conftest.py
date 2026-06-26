@@ -79,99 +79,147 @@ def make_model_downloader_mock(success: bool = True) -> MagicMock:
 
 
 def make_compose_tool_mock(
-    validate_ok: bool = True,
-    up_ok: bool = True,
-    down_ok: bool = True,
-    restart_ok: bool = True,
-    ps_ok: bool = True,
-    logs_ok: bool = True,
+    available: bool = True,
 ) -> MagicMock:
-    """Create a mock ComposeTool with configurable CommandResult returns."""
+    """Create a mock ComposeTool."""
     tool = MagicMock()
     tool.name = "podman-compose"
     tool.pretty_name = "Podman Compose (Standalone)"
-    tool.is_available.return_value = True
-    tool.validate.return_value = CommandResult(
-        returncode=0 if validate_ok else 1,
-        stdout="" if validate_ok else "",
-        stderr="" if validate_ok else "invalid",
-        success=validate_ok,
-    )
-    tool.up.return_value = CommandResult(
+    tool.is_available.return_value = available
+    return tool
+
+
+def make_lifecycle_mock(
+    up_ok: bool = True,
+    down_ok: bool = True,
+    restart_ok: bool = True,
+) -> MagicMock:
+    """Create a mock ComposeLifecycle."""
+    lc = MagicMock()
+    lc.up.return_value = CommandResult(
         returncode=0 if up_ok else 1,
         stdout="Container running",
         stderr="" if up_ok else "failed",
         success=up_ok,
     )
-    tool.down.return_value = CommandResult(
+    lc.down.return_value = CommandResult(
         returncode=0 if down_ok else 1,
         stdout="" if down_ok else "",
         stderr="" if down_ok else "failed",
         success=down_ok,
     )
-    tool.restart.return_value = CommandResult(
+    lc.restart.return_value = CommandResult(
         returncode=0 if restart_ok else 1,
         stdout="Restarted",
         stderr="" if restart_ok else "failed",
         success=restart_ok,
     )
-    tool.ps.return_value = CommandResult(
+    return lc
+
+
+def make_query_mock(
+    validate_ok: bool = True,
+    ps_ok: bool = True,
+    logs_ok: bool = True,
+) -> MagicMock:
+    """Create a mock ComposeQuery."""
+    q = MagicMock()
+    q.validate.return_value = CommandResult(
+        returncode=0 if validate_ok else 1,
+        stdout="" if validate_ok else "",
+        stderr="" if validate_ok else "invalid",
+        success=validate_ok,
+    )
+    q.ps.return_value = CommandResult(
         returncode=0 if ps_ok else 1,
         stdout="CONTAINER ID  IMAGE  COMMAND  CREATED  STATUS  PORTS  NAMES\nabc  llama-coder  ...  5s ago  Up 5s  8081  llama-coder",
         stderr="" if ps_ok else "failed",
         success=ps_ok,
     )
-    tool.logs.return_value = CommandResult(
+    q.logs.return_value = CommandResult(
         returncode=0 if logs_ok else 1,
         stdout="[INFO] Server started" if logs_ok else "",
         stderr="" if logs_ok else "failed",
         success=logs_ok,
     )
-    return tool
+    return q
 
 
-def make_container_runtime_mock(
+def make_runtime_mock(
     available: bool = True,
-    running: bool = True,
 ) -> MagicMock:
     """Create a mock ContainerRuntime."""
     rt = MagicMock()
     rt.name = "podman"
     rt.pretty_name = "Podman"
     rt.is_available.return_value = available
-    rt.is_running.return_value = running
-    rt.exec.return_value = CommandResult(
-        returncode=0, stdout="output", stderr="", success=True
-    )
-    rt.copy_to.return_value = CommandResult(
-        returncode=0, stdout="", stderr="", success=True
-    )
-    rt.ps.return_value = CommandResult(
+    return rt
+
+
+def make_inspector_mock(running: bool = True) -> MagicMock:
+    """Create a mock ContainerInspector."""
+    ins = MagicMock()
+    ins.is_running.return_value = running
+    ins.ps.return_value = CommandResult(
         returncode=0,
         stdout="CONTAINER ID  IMAGE  COMMAND  CREATED  STATUS  PORTS  NAMES\nabc  llama-coder  ...  5s ago  Up 5s  8081  llama-coder",
         stderr="",
         success=True,
     )
-    rt.logs.return_value = CommandResult(
+    ins.logs.return_value = CommandResult(
         returncode=0,
         stdout="[INFO] Server started",
         stderr="",
         success=True,
     )
-    return rt
+    return ins
 
 
-def make_runtime_detector_mock(runtime: Any = None) -> MagicMock:
-    """Create a mock RuntimeDetector."""
+def make_operator_mock() -> MagicMock:
+    """Create a mock ContainerOperator."""
+    op = MagicMock()
+    op.exec.return_value = CommandResult(
+        returncode=0, stdout="output", stderr="", success=True
+    )
+    op.copy_to.return_value = CommandResult(
+        returncode=0, stdout="", stderr="", success=True
+    )
+    return op
+
+
+def make_runtime_detector_mock(
+    runtime_mock: Any = None,
+    inspector_mock: Any = None,
+    operator_mock: Any = None,
+) -> MagicMock:
+    """Create a mock RuntimeDetector returning RuntimeDetection."""
+    from gb_ai_server.application.ports.outbound.runtime_detector import RuntimeDetection
+
     d = MagicMock()
-    d.detect.return_value = runtime or make_container_runtime_mock()
+    rd = RuntimeDetection(
+        runtime=runtime_mock or make_runtime_mock(),
+        inspector=inspector_mock or make_inspector_mock(),
+        operator=operator_mock or make_operator_mock(),
+    )
+    d.detect.return_value = rd
     return d
 
 
-def make_compose_detector_mock(tool: Any = None) -> MagicMock:
-    """Create a mock ComposeToolDetector."""
+def make_compose_detector_mock(
+    tool_mock: Any = None,
+    lifecycle_mock: Any = None,
+    query_mock: Any = None,
+) -> MagicMock:
+    """Create a mock ComposeToolDetector returning ComposeDetection."""
+    from gb_ai_server.application.ports.outbound.compose_detection import ComposeDetection
+
     d = MagicMock()
-    d.detect.return_value = tool or make_compose_tool_mock()
+    cd = ComposeDetection(
+        tool=tool_mock or make_compose_tool_mock(),
+        lifecycle=lifecycle_mock or make_lifecycle_mock(),
+        query=query_mock or make_query_mock(),
+    )
+    d.detect.return_value = cd
     return d
 
 
@@ -183,7 +231,7 @@ def make_compose_detector_mock(tool: Any = None) -> MagicMock:
 @pytest.fixture
 def fixture_dir() -> Path:
     """Path to the test fixtures directory."""
-    return Path(__file__).parent / "fixtures"
+    return Path(__file__).parent.parent / "fixtures"
 
 
 @pytest.fixture

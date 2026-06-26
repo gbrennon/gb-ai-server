@@ -6,24 +6,32 @@ from unittest.mock import patch
 
 from gb_ai_server.application.services import PrerequisiteVerifierService
 from gb_ai_server.application.dtos.requests import VerifyPrerequisitesRequest
-from tests.conftest import (
+from tests.gb_ai_server.conftest import (
     make_logger_mock,
     make_compose_tool_mock,
+    make_lifecycle_mock,
+    make_query_mock,
     make_runtime_detector_mock,
     make_compose_detector_mock,
-    make_container_runtime_mock,
+    make_runtime_mock,
+    make_inspector_mock,
+    make_operator_mock,
 )
 
 
 class TestPrerequisiteVerifierService:
     def test_all_prerequisites_pass(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
-        compose = make_compose_tool_mock(validate_ok=True)
-        runtime = make_container_runtime_mock()
+        tool = make_compose_tool_mock()
+        lifecycle = make_lifecycle_mock()
+        query = make_query_mock(validate_ok=True)
+        runtime = make_runtime_mock()
+        inspector = make_inspector_mock()
+        operator = make_operator_mock()
         service = PrerequisiteVerifierService(
             logger=logger,
-            runtime_detector=make_runtime_detector_mock(runtime),
-            compose_detector=make_compose_detector_mock(compose),
+            runtime_detector=make_runtime_detector_mock(runtime, inspector, operator),
+            compose_detector=make_compose_detector_mock(tool, lifecycle, query),
         )
 
         compose_file = tmp_path / "docker-compose.yml"
@@ -35,8 +43,12 @@ class TestPrerequisiteVerifierService:
             )
 
         assert response.success is True
-        assert service.container_runtime is not None
-        assert service.compose_tool is not None
+        assert response.container_runtime is not None
+        assert response.inspector is not None
+        assert response.operator is not None
+        assert response.compose_tool is not None
+        assert response.compose_lifecycle is not None
+        assert response.compose_query is not None
 
     def test_fails_when_runtime_not_detected(self) -> None:
         logger = make_logger_mock()
@@ -92,11 +104,11 @@ class TestPrerequisiteVerifierService:
 
     def test_fails_when_compose_file_missing(self) -> None:
         logger = make_logger_mock()
-        compose = make_compose_tool_mock(validate_ok=True)
+        query = make_query_mock(validate_ok=True)
         service = PrerequisiteVerifierService(
             logger=logger,
             runtime_detector=make_runtime_detector_mock(),
-            compose_detector=make_compose_detector_mock(compose),
+            compose_detector=make_compose_detector_mock(query_mock=query),
         )
 
         with patch("shutil.which", return_value="/usr/bin/curl"):
@@ -108,11 +120,11 @@ class TestPrerequisiteVerifierService:
 
     def test_fails_when_compose_validation_fails(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
-        compose = make_compose_tool_mock(validate_ok=False)
+        query = make_query_mock(validate_ok=False)
         service = PrerequisiteVerifierService(
             logger=logger,
             runtime_detector=make_runtime_detector_mock(),
-            compose_detector=make_compose_detector_mock(compose),
+            compose_detector=make_compose_detector_mock(query_mock=query),
         )
 
         compose_file = tmp_path / "docker-compose.yml"

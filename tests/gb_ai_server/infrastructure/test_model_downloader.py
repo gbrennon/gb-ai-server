@@ -9,7 +9,7 @@ import pytest
 from gb_ai_server.infrastructure.persistence.model_downloader import (
     HuggingFaceModelDownloader,
 )
-from tests.conftest import make_logger_mock
+from tests.gb_ai_server.conftest import make_logger_mock
 
 
 class _TestFileHandler(BaseHTTPRequestHandler):

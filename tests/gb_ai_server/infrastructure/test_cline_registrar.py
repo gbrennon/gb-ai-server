@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from gb_ai_server.infrastructure.persistence import ClineModelRegistrar
-from tests.conftest import make_logger_mock
+from tests.gb_ai_server.conftest import make_logger_mock
 
 
 class TestClineModelRegistrar:

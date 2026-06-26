@@ -3,6 +3,7 @@
 import sys
 import io
 
+from gb_ai_server.application.utils import print_section
 from gb_ai_server.infrastructure.logging import TerminalLogger, LogLevel
 
 
@@ -34,8 +35,7 @@ class TestTerminalLoggerColor:
             sys.stdin = old_stdin
 
     def test_section_output_format(self, capsys: object) -> None:
-        logger = TerminalLogger(use_color=False)
-        logger.section("Test")
+        print_section("Test")
         captured = capsys.readouterr()
         assert "\u2500" in captured.out
         assert "Test" in captured.out
