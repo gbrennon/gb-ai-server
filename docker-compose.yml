@@ -13,8 +13,10 @@ services:
       - llama_models:/models
     environment:
       LLAMA_MODEL: ${LLAMA_MODEL:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
-      N_GPU_LAYERS: ${N_GPU_LAYERS:-999}
-      CTX_SIZE: ${CTX_SIZE:-8192}
+      N_GPU_LAYERS: ${N_GPU_LAYERS:-999}        # Keep aggressive GPU loading
+      CTX_SIZE: ${CTX_SIZE:-32768}              # Increase from 8192 to 32K
+      N_THREADS: ${N_THREADS:-8}                # Match your CPU cores
+      N_THREADS_BATCH: ${N_THREADS_BATCH:-8}   # Batch processing
     command:
       - --model
       - /models/${LLAMA_MODEL:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
@@ -25,7 +27,7 @@ services:
       - --n-gpu-layers
       - "${N_GPU_LAYERS:-999}"
       - --ctx-size
-      - "${CTX_SIZE:-8192}"
+      - "${CTX_SIZE:-32768}"
     networks:
       - ai-net
 

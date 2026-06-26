@@ -101,6 +101,8 @@ class BootstrapCompositionRoot:
             if running_model is not None:
                 if running_model == model.filename:
                     self._model_selection_presenter.model_already_running(model.display_name)
+                    self._register_models(args, model)
+                    self._service_presenter.report_success(port=DEFAULT_PORT)
                     return 0
                 self._model_selection_presenter.switching_model(
                     self._model_name_for_filename(all_models, running_model),
@@ -283,12 +285,10 @@ class BootstrapCompositionRoot:
         registrar = ClineModelRegistrar(self._infra.logger)
         service = self._models.model_registrar(registrar)
 
-        model_tuples = [
-            (model.display_name, model.filename, DEFAULT_PORT, CONTAINER_NAME)
-        ]
+        model_tuple = (model.display_name, model.filename, DEFAULT_PORT, CONTAINER_NAME)
 
         from gb_ai_server.application.dtos.requests.register_models_request import RegisterModelsRequest
-        request = RegisterModelsRequest(models=model_tuples)
+        request = RegisterModelsRequest(model=model_tuple)
         response = service.execute(request)
         if response.success:
             self._registration_presenter.models_registered([model.display_name])

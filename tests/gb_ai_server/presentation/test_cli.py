@@ -87,18 +87,17 @@ class TestMain:
         with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
             with patch("gb_ai_server.presentation.cli.ClineModelRegistrar") as MockRegistrar:
                 instance = MockRegistrar.return_value
-                instance.register_models.return_value = register_return
+                instance.register_model.return_value = register_return
                 result = main(full_args)
                 if register_return:
                     MockRegistrar.assert_called_once()
-                    instance.register_models.assert_called_once()
-                    call_args = instance.register_models.call_args
+                    instance.register_model.assert_called_once()
+                    call_args = instance.register_model.call_args
                     _, kwargs = call_args
-                    models_arg = kwargs.get("models", args[0] if args else None)
-                    assert models_arg is not None
-                    assert len(models_arg) == 1
-                    assert len(models_arg[0]) == 4
-                    assert models_arg[0][3] == "llama-coder"
+                    model_arg = kwargs.get("model")
+                    assert model_arg is not None
+                    assert len(model_arg) == 4
+                    assert model_arg[3] == "llama-coder"
                 return result
 
     def test_register_models_successful(self, tmp_path: Path) -> None:
@@ -125,13 +124,13 @@ class TestMain:
         with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
             with patch("gb_ai_server.presentation.cli.ClineModelRegistrar") as MockRegistrar:
                 instance = MockRegistrar.return_value
-                instance.register_models.return_value = True
+                instance.register_model.return_value = True
                 result = main([
                     "--register-models",
                     "--models-dir", str(models_dir),
                 ])
                 assert result == 0
-                instance.register_models.assert_not_called()
+                instance.register_model.assert_not_called()
 
     def test_list_models(self, tmp_path: Path) -> None:
         scripts_dir = tmp_path / "scripts"
@@ -169,7 +168,7 @@ class TestMain:
         with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
             with patch("gb_ai_server.presentation.cli.ClineModelRegistrar") as MockRegistrar:
                 instance = MockRegistrar.return_value
-                instance.register_models.return_value = True
+                instance.register_model.return_value = True
 
                 result = main([
                     "--register-models",
@@ -178,11 +177,11 @@ class TestMain:
                 ])
 
                 assert result == 0
-                call_args = instance.register_models.call_args
+                call_args = instance.register_model.call_args
                 _, kwargs = call_args
-                models_arg = kwargs.get("models")
-                assert len(models_arg) == 1
-                assert models_arg[0][0] == "model-b"
+                model_arg = kwargs.get("model")
+                assert model_arg is not None
+                assert model_arg[0] == "model-b"
 
     def test_register_models_with_bad_model_flag(self, tmp_path: Path) -> None:
         scripts_dir = tmp_path / "scripts"

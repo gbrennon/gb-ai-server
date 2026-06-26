@@ -15,8 +15,8 @@ class TestClineModelRegistrar:
         cline_data = tmp_path / "cline" / "data"
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
-        result = registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        result = registrar.register_model(
+            model=("model-a", "a.gguf", 8081, "llama-coder"),
         )
 
         assert result is True
@@ -46,8 +46,8 @@ class TestClineModelRegistrar:
         )
 
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        registrar.register_model(
+            model=("model-a", "a.gguf", 8081, "llama-coder"),
         )
 
         data = json.loads(state_file.read_text())
@@ -76,8 +76,8 @@ class TestClineModelRegistrar:
         )
 
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        registrar.register_model(
+            model=("model-a", "a.gguf", 8081, "llama-coder"),
         )
 
         data = json.loads(state_file.read_text())
@@ -92,8 +92,8 @@ class TestClineModelRegistrar:
         cline_data = tmp_path / "cline" / "data"
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        registrar.register_model(
+            model=("model-a", "a.gguf", 8081, "llama-coder"),
             provider_base_url="http://localhost:9999",
         )
 
@@ -122,8 +122,8 @@ class TestClineModelRegistrar:
         )
 
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        registrar.register_model(
+            model=("model-a", "a.gguf", 8081, "llama-coder"),
         )
 
         data = json.loads(providers_file.read_text())
@@ -153,8 +153,8 @@ class TestClineModelRegistrar:
         )
 
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        registrar.register_model(
+            model=("model-a", "a.gguf", 8081, "llama-coder"),
         )
 
         data = json.loads(providers_file.read_text())
@@ -183,8 +183,8 @@ class TestClineModelRegistrar:
         )
 
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        registrar.register_model(
+            model=("model-a", "a.gguf", 8081, "llama-coder"),
         )
 
         data = json.loads(providers_file.read_text())
@@ -196,7 +196,7 @@ class TestClineModelRegistrar:
         cline_data = tmp_path / "cline" / "data"
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
-        result = registrar.register_models(models=[])
+        result = registrar.register_model(model=None)  # type: ignore[arg-type]
 
         assert result is False
 
@@ -224,19 +224,15 @@ class TestClineModelRegistrar:
         cline_data = tmp_path / "cline" / "data"
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder"), ("model-b", "b.gguf", 8082, "llama-qwen3")],
+        registrar.register_model(
+            model=("model-a", "a.gguf", 8081, "llama-coder"),
         )
 
         providers_file = cline_data / "settings" / "providers.json"
         data = json.loads(providers_file.read_text())
         assert data["providers"]["openai-compatible"]["settings"]["baseUrl"] == "http://localhost:8081/v1"
         assert data["providers"]["openai-compatible"]["settings"]["model"] == "a.gguf"
-        assert data["providers"]["openai-native"]["settings"]["baseUrl"] == "http://localhost:8082/v1"
-        assert data["providers"]["openai-native"]["settings"]["model"] == "b.gguf"
-        assert data["providers"]["openai-native"]["settings"]["provider"] == "openai-native"
-        assert "openai-compatible" in data["providers"]
-        assert "openai-native" in data["providers"]
+        assert "llama-coder" in data["providers"]
 
     def test_uses_CLINE_DATA_DIR_env_var(self, tmp_path: Path, monkeypatch) -> None:
         logger = make_logger_mock()
@@ -244,8 +240,8 @@ class TestClineModelRegistrar:
         monkeypatch.setenv("CLINE_DATA_DIR", str(cline_data))
 
         registrar = ClineModelRegistrar(logger)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        registrar.register_model(
+            model=("model-a", "a.gguf", 8081, "llama-coder"),
         )
 
         providers_file = cline_data / "settings" / "providers.json"
@@ -256,8 +252,8 @@ class TestClineModelRegistrar:
         cline_data = tmp_path / "cline" / "data"
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
-        result = registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder"), ("model-b", "b.gguf", 8082, "llama-qwen3")],
+        result = registrar.register_model(
+            model=("model-a", "a.gguf", 8081, "llama-coder"),
         )
 
         assert result is True
@@ -269,24 +265,33 @@ class TestClineModelRegistrar:
         assert "llama-coder" in data["providers"]
         assert data["providers"]["llama-coder"]["provider"]["defaultModelId"] == "a.gguf"
         assert "a.gguf" in data["providers"]["llama-coder"]["models"]
-        
-        assert "llama-qwen3" in data["providers"]
-        assert data["providers"]["llama-qwen3"]["provider"]["defaultModelId"] == "b.gguf"
-        assert "b.gguf" in data["providers"]["llama-qwen3"]["models"]
 
         assert "openai-compatible" in data["providers"]
         # defaultModelId is non-prefixed (like ollama provider)
         assert data["providers"]["openai-compatible"]["provider"]["defaultModelId"] == "a.gguf"
         # models dict keys are non-prefixed
         assert "a.gguf" in data["providers"]["openai-compatible"]["models"]
-        assert data["providers"]["openai-compatible"]["models"]["a.gguf"]["contextWindow"] == 8192
+        # a.gguf doesn't match any model size pattern → mapper returns default context_size=4096
+        assert data["providers"]["openai-compatible"]["models"]["a.gguf"]["contextWindow"] == 4096
         assert "tools" in data["providers"]["openai-compatible"]["models"]["a.gguf"]["capabilities"]
         # Check modelsSourceUrl is set
         assert data["providers"]["openai-compatible"]["provider"]["modelsSourceUrl"] == "http://localhost:8081/models"
         assert data["providers"]["openai-compatible"]["provider"]["protocol"] == "openai-chat"
         assert data["providers"]["openai-compatible"]["provider"]["client"] == "openai-compatible"
-        assert "openai-native" in data["providers"]
-        assert data["providers"]["openai-native"]["provider"]["defaultModelId"] == "b.gguf"
-        assert "b.gguf" in data["providers"]["openai-native"]["models"]
-        assert data["providers"]["openai-native"]["models"]["b.gguf"]["contextWindow"] == 8192
-        assert data["providers"]["openai-native"]["provider"]["modelsSourceUrl"] == "http://localhost:8082/models"
+
+    def test_registers_context_window_from_filename(self, tmp_path: Path) -> None:
+        """Context window is derived from filename via ResourceRequirementsMapper."""
+        logger = make_logger_mock()
+        cline_data = tmp_path / "cline" / "data"
+        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
+
+        result = registrar.register_model(
+            model=("qwen2.5-coder:7b", "qwen2.5-coder-7b-instruct-q4_k_m.gguf", 8081, "llama-coder"),
+        )
+
+        assert result is True
+        models_file = cline_data / "settings" / "models.json"
+        data = json.loads(models_file.read_text())
+        # 7b pattern → context_size=8192 from the mapper
+        assert data["providers"]["openai-compatible"]["models"]["qwen2.5-coder-7b-instruct-q4_k_m.gguf"]["contextWindow"] == 8192
+        assert data["providers"]["openai-compatible"]["models"]["qwen2.5-coder-7b-instruct-q4_k_m.gguf"]["maxInputTokens"] == 8192

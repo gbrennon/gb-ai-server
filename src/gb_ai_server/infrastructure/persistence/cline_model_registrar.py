@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ...application.ports.outbound.logger import Logger
+from ...domain.resource_requirements_mapper import ResourceRequirementsMapper
 
 
 class ClineModelRegistrar:
@@ -36,26 +37,26 @@ class ClineModelRegistrar:
         self._models_file = self._settings_dir / "models.json"
         self._state_file = cline_home / "globalState.json"
 
-    def register_models(
+    def register_model(
         self,
-        models: list[tuple[str, str, int, str]],
+        model: tuple[str, str, int, str],
         provider_base_url: str | None = None,
     ) -> bool:
-        if not models:
-            self.logger.warn("No models to register with Cline")
+        if model is None:
+            self.logger.warn("No model to register with Cline")
             return False
 
         try:
-            self._update_providers(models, provider_base_url)
-            self._update_models(models, provider_base_url)
-            self._update_global_state(models)
+            self._update_providers(model, provider_base_url)
+            self._update_models(model, provider_base_url)
+            self._update_global_state(model)
 
             self.logger.ok(
-                f"Registered {len(models)} model(s) with Cline"
+                f"Registered model with Cline"
             )
             return True
         except Exception as e:
-            self.logger.warn(f"Failed to register models with Cline: {e}")
+            self.logger.warn(f"Failed to register model with Cline: {e}")
             return False
 
     def is_registered(self, model_name: str) -> bool:
@@ -85,7 +86,7 @@ class ClineModelRegistrar:
 
     def _update_providers(
         self,
-        models: list[tuple[str, str, int, str]],
+        model: tuple[str, str, int, str],
         provider_base_url: str | None = None,
     ) -> None:
         data: dict = {}
@@ -108,20 +109,49 @@ class ClineModelRegistrar:
                 if key.startswith("local llama") or key.startswith("local-llama"):
                     data["providers"].pop(key, None)
 
-        for idx, (display_name, filename, port, container_name) in enumerate(models):
-            # Use container name for provider ID (e.g., "llama-coder", "llama-qwen3")
-            provider_id = container_name if idx == 0 else f"{container_name}"
-            base_url = provider_base_url or f"http://localhost:{port}"
+        display_name, filename, port, container_name = model[0], model[1], model[2], model[3]
+        # Cline supports provider IDs like "llama-coder" by using kebab-case
+        # Use the container name as the provider ID to enable cline read the model as "llama-coder/a.gguf"
+        provider_id = container_name.lower().replace('_', '-')
+        base_url = provider_base_url or f"http://localhost:{port}"
 
-            if idx == 0:
-                data["lastUsedProvider"] = "openai-compatible"
-            elif idx == 1:
-                data["lastUsedProvider"] = "openai-native"
+        data["lastUsedProvider"] = "openai-compatible"
 
-            # Register the custom provider ID with container name
-            data["providers"][provider_id] = {
+        # Register the custom provider ID with container name
+        data["providers"][provider_id] = {
+            "settings": {
+                "provider": "openai-compatible",
+                "model": filename,
+                "baseUrl": f"{base_url}/v1",
+                "apiKey": "dummy",
+                "timeout": 30000,
+                "reasoning": {
+                    "budgetTokens": 1024,
+                },
+            },
+            "updatedAt": now,
+            "tokenSource": "migration",
+        }
+
+        # Register the built-in openai-compatible provider ID ONLY if it does not exist
+        # or if it is currently pointing to localhost (safe to overwrite)
+        cli_provider_id = "openai-compatible"
+        should_write_cli = True
+        if cli_provider_id in data["providers"]:
+            settings = data["providers"][cli_provider_id].get("settings", {})
+            existing_url = settings.get("baseUrl", "")
+            if (
+                existing_url
+                and "localhost" not in existing_url
+                and "127.0.0.1" not in existing_url
+                and "api.openai.com" not in existing_url
+            ):
+                should_write_cli = False
+
+        if should_write_cli:
+            data["providers"][cli_provider_id] = {
                 "settings": {
-                    "provider": "openai-compatible",
+                    "provider": cli_provider_id,
                     "model": filename,
                     "baseUrl": f"{base_url}/v1",
                     "apiKey": "dummy",
@@ -134,42 +164,11 @@ class ClineModelRegistrar:
                 "tokenSource": "migration",
             }
 
-            # Register the built-in compatible provider IDs ONLY if they do not exist
-            # or if they are currently pointing to localhost (safe to overwrite)
-            cli_provider_id = "openai-compatible" if idx == 0 else "openai-native"
-            should_write_cli = True
-            if cli_provider_id in data["providers"]:
-                settings = data["providers"][cli_provider_id].get("settings", {})
-                existing_url = settings.get("baseUrl", "")
-                if (
-                    existing_url
-                    and "localhost" not in existing_url
-                    and "127.0.0.1" not in existing_url
-                    and "api.openai.com" not in existing_url
-                ):
-                    should_write_cli = False
-
-            if should_write_cli:
-                data["providers"][cli_provider_id] = {
-                    "settings": {
-                        "provider": cli_provider_id,
-                        "model": filename,
-                        "baseUrl": f"{base_url}/v1",
-                        "apiKey": "dummy",
-                        "timeout": 30000,
-                        "reasoning": {
-                            "budgetTokens": 1024,
-                        },
-                    },
-                    "updatedAt": now,
-                    "tokenSource": "migration",
-                }
-
         self._providers_file.write_text(json.dumps(data, indent=2) + "\n")
 
     def _update_models(
         self,
-        models: list[tuple[str, str, int, str]],
+        model: tuple[str, str, int, str],
         provider_base_url: str | None = None,
     ) -> None:
         data: dict = {}
@@ -194,56 +193,58 @@ class ClineModelRegistrar:
                 if key.startswith("local llama") or key.startswith("local-llama"):
                     data["providers"].pop(key, None)
 
-        # Build all models dict with non-prefixed IDs (e.g., "model.gguf") like ollama provider
-        all_models: dict[str, dict] = {}
-        for display_name, filename, port, container_name in models:
-            all_models[filename] = {
-                "id": filename,
-                "name": filename,
-                "contextWindow": 8192,
-                "maxInputTokens": 8192,
-                "capabilities": ["streaming", "tools"],
-                "supportsVision": False,
-                "supportsAttachments": False,
-                "supportsReasoning": False,
-            }
+        display_name, filename, port, container_name = model[0], model[1], model[2], model[3]
+        ctx_size = ResourceRequirementsMapper.context_size_for_model(filename)
 
-        # Register each container as a provider with ALL models
-        for idx, (display_name, filename, port, container_name) in enumerate(models):
-            # Use container name for provider ID (e.g., "llama-coder", "llama-qwen3")
-            provider_id = container_name
-            base_url = provider_base_url or f"http://localhost:{port}"
-            default_model_id = filename  # Non-prefixed like ollama provider
+        model_entry = {
+            "id": filename,
+            "name": filename,
+            "contextWindow": ctx_size,
+            "maxInputTokens": ctx_size,
+            "capabilities": ["streaming", "tools"],
+            "supportsVision": False,
+            "supportsAttachments": False,
+            "supportsReasoning": False,
+        }
+        all_models: dict[str, dict] = {filename: model_entry}
 
-            data["providers"][provider_id] = {
-                "provider": {
-                    "name": provider_id,
-                    "baseUrl": f"{base_url}/v1",
-                    "defaultModelId": default_model_id,
-                    "protocol": "openai-chat",
-                    "client": "openai-compatible",
-                    "modelsSourceUrl": f"{base_url}/models",
-                },
-                "models": all_models.copy()
-            }
+        # Register the custom container as a provider
+        provider_id = container_name.lower().replace('_', '-')
+        base_url = provider_base_url or f"http://localhost:{port}"
+        default_model_id = filename
 
-            # Also register under the built-in compatible provider IDs so the select box has them
-            cli_provider_id = "openai-compatible" if idx == 0 else "openai-native"
-            data["providers"][cli_provider_id] = {
-                "provider": {
-                    "name": "OpenAI Compatible" if idx == 0 else "OpenAI Native",
-                    "baseUrl": f"{base_url}/v1",
-                    "defaultModelId": default_model_id,
-                    "protocol": "openai-chat",
-                    "client": "openai-compatible",
-                    "modelsSourceUrl": f"{base_url}/models",
-                },
-                "models": all_models.copy()
-            }
+        data["providers"][provider_id] = {
+            "provider": {
+                "name": provider_id,
+                "baseUrl": f"{base_url}/v1",
+                "defaultModelId": default_model_id,
+                "protocol": "openai-chat",
+                "client": "openai-compatible",
+                "modelsSourceUrl": f"{base_url}/models",
+            },
+            "models": all_models.copy()
+        }
+
+        # Also register under the built-in openai-compatible provider
+        cli_provider_id = "openai-compatible"
+        data["providers"][cli_provider_id] = {
+            "provider": {
+                "name": "OpenAI Compatible",
+                "baseUrl": f"{base_url}/v1",
+                "defaultModelId": default_model_id,
+                "protocol": "openai-chat",
+                "client": "openai-compatible",
+                "modelsSourceUrl": f"{base_url}/models",
+            },
+            "models": all_models.copy()
+        }
 
         self._models_file.write_text(json.dumps(data, indent=2) + "\n")
 
-    def _update_global_state(self, models: list[tuple[str, str, int, str]]) -> None:
+    def _update_global_state(
+        self,
+        model: tuple[str, str, int, str]
+    ) -> None:
         data: dict = {}
         if self._state_file.exists():
             try:
@@ -258,8 +259,8 @@ class ClineModelRegistrar:
             or data.get("api-provider")
         )
 
-        first_display_name, first_filename, first_port, first_container = models[0]
-        custom_provider_id = first_container
+        display_name, filename, port, container_name = model[0], model[1], model[2], model[3]
+        custom_provider_id = container_name
 
         is_local_provider = (
             not current_provider
@@ -278,33 +279,28 @@ class ClineModelRegistrar:
             data["act-mode-api-provider"] = "openai-compatible"
             data["plan-mode-api-provider"] = "openai-compatible"
 
-            data["openAiModelId"] = first_filename
-            data["actModeOpenAiModelId"] = first_filename
-            data["planModeOpenAiModelId"] = first_filename
-            data["open-ai-model-id"] = first_filename
-            data["act-mode-open-ai-model-id"] = first_filename
-            data["plan-mode-open-ai-model-id"] = first_filename
-            data["openAiBaseUrl"] = f"http://localhost:{first_port}/v1"
-            data["open-ai-base-url"] = f"http://localhost:{first_port}/v1"
+            data["openAiModelId"] = filename
+            data["actModeOpenAiModelId"] = filename
+            data["planModeOpenAiModelId"] = filename
+            data["open-ai-model-id"] = filename
+            data["act-mode-open-ai-model-id"] = filename
+            data["plan-mode-open-ai-model-id"] = filename
+            data["openAiBaseUrl"] = f"http://localhost:{port}/v1"
+            data["open-ai-base-url"] = f"http://localhost:{port}/v1"
 
-        for idx, (display_name, filename, port, container_name) in enumerate(models):
-            provider_ids = [container_name]
-            if idx == 0:
-                provider_ids.append("openai-compatible")
-            else:
-                provider_ids.append("openai-native")
+        provider_ids = [container_name.lower().replace('_', '-'), "openai-compatible"]
 
-            for pid in provider_ids:
-                # Kebab case keys
-                data[f"{pid}-model-id"] = filename
-                data[f"act-mode-{pid}-model-id"] = filename
-                data[f"plan-mode-{pid}-model-id"] = filename
+        for pid in provider_ids:
+            # Kebab case keys
+            data[f"{pid}-model-id"] = filename
+            data[f"act-mode-{pid}-model-id"] = filename
+            data[f"plan-mode-{pid}-model-id"] = filename
 
-                # Camel case keys
-                cc_pid = self._to_camel_case(pid)
-                data[f"{cc_pid}ModelId"] = filename
-                data[f"actMode{self._capitalize_first(cc_pid)}ModelId"] = filename
-                data[f"planMode{self._capitalize_first(cc_pid)}ModelId"] = filename
+            # Camel case keys
+            cc_pid = self._to_camel_case(pid)
+            data[f"{cc_pid}ModelId"] = filename
+            data[f"actMode{self._capitalize_first(cc_pid)}ModelId"] = filename
+            data[f"planMode{self._capitalize_first(cc_pid)}ModelId"] = filename
 
         self._state_file.write_text(json.dumps(data, indent=2) + "\n")
 

@@ -160,17 +160,15 @@ def _register_only(args: argparse.Namespace) -> int:
         logger.warn("No available models to register")
         return 0
 
-    model_tuples = [
-        (m.display_name, m.filename, PortAllocator.port_for_model(0), "llama-coder")
-        for m in available
-    ]
+    model = available[0]
+    model_tuple = (model.display_name, model.filename, PortAllocator.port_for_model(0), "llama-coder")
 
     registrar = ClineModelRegistrar(logger)
     models_factory = ModelServiceFactory(infra)
     service = models_factory.model_registrar(registrar)
 
     from gb_ai_server.application.dtos.requests.register_models_request import RegisterModelsRequest
-    request = RegisterModelsRequest(models=model_tuples)
+    request = RegisterModelsRequest(model=model_tuple)
     response = service.execute(request)
 
     if response.success:
