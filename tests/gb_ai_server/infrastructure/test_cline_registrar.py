@@ -160,6 +160,36 @@ class TestClineModelRegistrar:
         assert data["providers"]["openai-compatible"]["settings"]["apiKey"] == "sk-external-key"
         assert data["providers"]["openai-compatible"]["settings"]["baseUrl"] == "https://api.together.xyz/v1"
 
+    def test_overwrites_default_openai_compatible_provider(self, tmp_path: Path) -> None:
+        logger = make_logger_mock()
+        cline_data = tmp_path / "cline" / "data"
+        settings_dir = cline_data / "settings"
+        settings_dir.mkdir(parents=True, exist_ok=True)
+        providers_file = settings_dir / "providers.json"
+        providers_file.write_text(
+            json.dumps({
+                "version": 1,
+                "providers": {
+                    "openai-compatible": {
+                        "settings": {
+                            "provider": "openai-compatible",
+                            "baseUrl": "https://api.openai.com/v1",
+                            "apiKey": "some-key"
+                        }
+                    }
+                },
+            })
+        )
+
+        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
+        registrar.register_models(
+            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        )
+
+        data = json.loads(providers_file.read_text())
+        assert data["providers"]["openai-compatible"]["settings"]["baseUrl"] == "http://localhost:8081/v1"
+        assert data["providers"]["openai-compatible"]["settings"]["apiKey"] == "dummy"
+
     def test_returns_false_with_no_models(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
         cline_data = tmp_path / "cline" / "data"
