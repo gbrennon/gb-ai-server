@@ -4,7 +4,7 @@ services:
     container_name: llama-coder
     restart: unless-stopped
     devices:
-      - nvidia.com/gpu=all
+      - nvidia.com/gpu=0
     security_opt:
       - label=disable
     ports:
