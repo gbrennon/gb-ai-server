@@ -24,7 +24,7 @@ class TestClineModelRegistrar:
         assert providers_file.exists()
         data = json.loads(providers_file.read_text())
         assert data["version"] == 1
-        assert data["lastUsedProvider"] == "llama-coder"
+        assert data["lastUsedProvider"] == "openai-compatible"
         provider = data["providers"]["llama-coder"]
         assert provider["settings"]["baseUrl"] == "http://localhost:8081/v1"
         assert provider["settings"]["model"] == "a.gguf"
