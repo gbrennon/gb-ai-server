@@ -118,21 +118,6 @@ class ClineModelRegistrar:
             elif idx == 1:
                 data["lastUsedProvider"] = "openai-native"
 
-            # Register the custom provider ID with container name
-            data["providers"][provider_id] = {
-                "settings": {
-                    "provider": "openai-compatible",
-                    "model": filename,
-                    "baseUrl": f"{base_url}/v1",
-                    "apiKey": "dummy",
-                    "timeout": 30000,
-                    "reasoning": {
-                        "budgetTokens": 1024,
-                    },
-                },
-                "updatedAt": now,
-                "tokenSource": "migration",
-            }
 
             # Register the built-in compatible provider IDs ONLY if they do not exist
             # or if they are currently pointing to localhost (safe to overwrite)
@@ -215,18 +200,6 @@ class ClineModelRegistrar:
             base_url = provider_base_url or f"http://localhost:{port}"
             default_model_id = filename  # Non-prefixed like ollama provider
 
-            data["providers"][provider_id] = {
-                "provider": {
-                    "name": provider_id,
-                    "baseUrl": f"{base_url}/v1",
-                    "defaultModelId": default_model_id,
-                    "protocol": "openai-chat",
-                    "client": "openai-compatible",
-                    # llama.cpp has /models endpoint for model discovery
-                    "modelsSourceUrl": f"{base_url}/models",
-                },
-                "models": all_models.copy()
-            }
 
             # Also register under the built-in compatible provider IDs so the select box has them
             cli_provider_id = "openai-compatible" if idx == 0 else "openai-native"
