@@ -45,6 +45,7 @@ testpaths = ["tests"]
 pythonpath = ["src", "."]
 asyncio_mode = "strict"
 addopts = [
+    "--import-mode=importlib",
     "--strict-markers",
     "--strict-config",
     "--cov=gb_ai_server",

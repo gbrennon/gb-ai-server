@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from gb_ai_server.infrastructure.compose.docker_standalone_runtime import DockerComposeStandalone
-from gb_ai_server.infrastructure.compose.docker_standalone_lifecycle import DockerComposeStandaloneLifecycle
-from gb_ai_server.infrastructure.compose.docker_standalone_query import DockerComposeStandaloneQuery
+from gb_ai_server.infrastructure.docker import DockerComposeStandalone
+from gb_ai_server.infrastructure.docker import DockerComposeStandaloneLifecycle
+from gb_ai_server.infrastructure.docker import DockerComposeStandaloneQuery
 from tests.gb_ai_server.helpers import make_script, install_docker_compose
 
 

@@ -3,18 +3,22 @@
 from dataclasses import dataclass
 from ...application.ports.outbound import ComposeTool, ComposeLifecycle, ComposeQuery
 from ...application.ports.outbound.compose_detection import ComposeDetection
-from .podman_standalone_runtime import PodmanComposeStandalone
-from .podman_standalone_lifecycle import PodmanComposeStandaloneLifecycle
-from .podman_standalone_query import PodmanComposeStandaloneQuery
-from .podman_builtin_runtime import PodmanComposeBuiltin
-from .podman_builtin_lifecycle import PodmanComposeBuiltinLifecycle
-from .podman_builtin_query import PodmanComposeBuiltinQuery
-from .docker_standalone_runtime import DockerComposeStandalone
-from .docker_standalone_lifecycle import DockerComposeStandaloneLifecycle
-from .docker_standalone_query import DockerComposeStandaloneQuery
-from .docker_builtin_runtime import DockerComposeBuiltin
-from .docker_builtin_lifecycle import DockerComposeBuiltinLifecycle
-from .docker_builtin_query import DockerComposeBuiltinQuery
+from ..podman import (
+    PodmanComposeStandalone,
+    PodmanComposeStandaloneLifecycle,
+    PodmanComposeStandaloneQuery,
+    PodmanComposeBuiltin,
+    PodmanComposeBuiltinLifecycle,
+    PodmanComposeBuiltinQuery,
+)
+from ..docker import (
+    DockerComposeStandalone,
+    DockerComposeStandaloneLifecycle,
+    DockerComposeStandaloneQuery,
+    DockerComposeBuiltin,
+    DockerComposeBuiltinLifecycle,
+    DockerComposeBuiltinQuery,
+)
 
 
 @dataclass

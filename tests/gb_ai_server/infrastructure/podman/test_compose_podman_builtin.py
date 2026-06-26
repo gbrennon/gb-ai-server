@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from gb_ai_server.infrastructure.compose.podman_builtin_runtime import PodmanComposeBuiltin
-from gb_ai_server.infrastructure.compose.podman_builtin_lifecycle import PodmanComposeBuiltinLifecycle
-from gb_ai_server.infrastructure.compose.podman_builtin_query import PodmanComposeBuiltinQuery
+from gb_ai_server.infrastructure.podman import PodmanComposeBuiltin
+from gb_ai_server.infrastructure.podman import PodmanComposeBuiltinLifecycle
+from gb_ai_server.infrastructure.podman import PodmanComposeBuiltinQuery
 from tests.gb_ai_server.helpers import make_script, install_podman_compose
 
 
