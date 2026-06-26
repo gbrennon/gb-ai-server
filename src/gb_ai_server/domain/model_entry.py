@@ -1,5 +1,7 @@
 """Model entry domain logic."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 
@@ -8,20 +10,25 @@ class ModelEntry:
     """
     Immutable model specification entry.
 
-    Format: "display_name|filename|download_url"
+    Supports two formats:
+      3-part: "display_name|filename|download_url"
+      5-part: "display_name|filename|download_url|n_gpu_layers|ctx_size"
     """
 
     display_name: str
     filename: str
     url: str
+    n_gpu_layers: int = 999
+    ctx_size: int = 8192
 
     @classmethod
-    def from_string(cls, entry: str) -> "ModelEntry":
+    def from_string(cls, entry: str) -> ModelEntry:
         """
         Parse model entry from pipe-delimited string.
 
         Args:
-            entry: String in format "display_name|filename|url"
+            entry: String in 3-part "display_name|filename|url"
+                    or 5-part "display_name|filename|url|n_gpu_layers|ctx_size"
 
         Returns:
             ModelEntry instance.
@@ -30,34 +37,52 @@ class ModelEntry:
             ValueError: If entry format is invalid.
         """
         parts = entry.split("|")
-        if len(parts) != 3:
+        if len(parts) not in (3, 5):
             msg = (
                 f"Invalid model entry format: {entry}. "
-                "Expected: display_name|filename|url"
+                "Expected: display_name|filename|url "
+                "or display_name|filename|url|n_gpu_layers|ctx_size"
             )
             raise ValueError(msg)
 
-        display_name, filename, url = parts
+        display_name, filename, url = parts[0], parts[1], parts[2]
         if not all([display_name, filename, url]):
             raise ValueError("Model entry contains empty fields")
+
+        n_gpu_layers = 999
+        ctx_size = 8192
+        if len(parts) == 5:
+            n_gpu_layers = int(parts[3].strip())
+            ctx_size = int(parts[4].strip())
 
         return cls(
             display_name=display_name.strip(),
             filename=filename.strip(),
             url=url.strip(),
+            n_gpu_layers=n_gpu_layers,
+            ctx_size=ctx_size,
         )
 
     @classmethod
-    def from_tuple(cls, entry: tuple[str, str, str]) -> "ModelEntry":
+    def from_tuple(cls, entry: tuple) -> ModelEntry:
         """
         Create ModelEntry from tuple.
 
         Args:
             entry: Tuple of (display_name, filename, url)
+                    or (display_name, filename, url, n_gpu_layers, ctx_size)
 
         Returns:
             ModelEntry instance.
         """
+        if len(entry) == 5:
+            return cls(
+                display_name=entry[0],
+                filename=entry[1],
+                url=entry[2],
+                n_gpu_layers=entry[3],
+                ctx_size=entry[4],
+            )
         return cls(
             display_name=entry[0],
             filename=entry[1],
