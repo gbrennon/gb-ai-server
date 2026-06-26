@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -51,6 +50,7 @@ class ClineModelRegistrar:
 
             first_display_name, first_filename, first_port, first_container = models[0]
             first_base_url = provider_base_url or f"http://localhost:{first_port}"
+            # Use non-prefixed model ID for global state (like ollama provider)
             self._update_global_state(first_display_name, first_filename, first_base_url, first_container)
 
             self.logger.ok(
@@ -79,6 +79,13 @@ class ClineModelRegistrar:
                 or data.get("open-ai-model-id")
             )
             # Check if provider is a llama container (starts with "llama-")
+            # Model ID in state is non-prefixed (like ollama provider)
+            # Accept both prefixed and non-prefixed model names for backward compatibility
+            if model_id == model_name:
+                return True
+            # Check if model_name is provider-prefixed and matches
+            if provider and provider.startswith("llama-") and model_name.startswith(f"{provider}/"):
+                return model_id == model_name.removeprefix(f"{provider}/")
             return provider is not None and provider.startswith("llama-") and model_id == model_name
         except Exception:
             return False
@@ -206,29 +213,38 @@ class ClineModelRegistrar:
                 if key.startswith("local llama") or key.startswith("local-llama"):
                     data["providers"].pop(key, None)
 
+        # Build all models dict with non-prefixed IDs (e.g., "model.gguf") like ollama provider
+        all_models: dict[str, dict] = {}
+        for display_name, filename, port, container_name in models:
+            all_models[filename] = {
+                "id": filename,
+                "name": filename,
+                "contextWindow": 8192,
+                "maxInputTokens": 8192,
+                "capabilities": ["streaming", "tools"],
+                "supportsVision": False,
+                "supportsAttachments": False,
+                "supportsReasoning": False,
+            }
+
+        # Register each container as a provider with ALL models
         for idx, (display_name, filename, port, container_name) in enumerate(models):
             # Use container name for provider ID (e.g., "llama-coder", "llama-qwen3")
-            provider_id = container_name if idx == 0 else f"{container_name}"
+            provider_id = container_name
             base_url = provider_base_url or f"http://localhost:{port}"
+            default_model_id = filename  # Non-prefixed like ollama provider
 
             data["providers"][provider_id] = {
                 "provider": {
                     "name": provider_id,
                     "baseUrl": f"{base_url}/v1",
-                    "defaultModelId": filename,
+                    "defaultModelId": default_model_id,
+                    "protocol": "openai-chat",
+                    "client": "openai-compatible",
+                    # llama.cpp has /models endpoint for model discovery
+                    "modelsSourceUrl": f"{base_url}/models",
                 },
-                "models": {
-                    filename: {
-                        "id": filename,
-                        "name": filename,
-                        "contextWindow": 8192,
-                        "maxInputTokens": 8192,
-                        "capabilities": ["streaming", "tools"],
-                        "supportsVision": False,
-                        "supportsAttachments": False,
-                        "supportsReasoning": False,
-                    }
-                }
+                "models": all_models.copy()
             }
 
             cli_provider_id = "openai-compatible" if idx == 0 else "openai-native"
@@ -236,20 +252,12 @@ class ClineModelRegistrar:
                 "provider": {
                     "name": "OpenAI Compatible" if idx == 0 else "OpenAI Native",
                     "baseUrl": f"{base_url}/v1",
-                    "defaultModelId": filename,
+                    "defaultModelId": default_model_id,
+                    "protocol": "openai-chat",
+                    "client": "openai-compatible",
+                    "modelsSourceUrl": f"{base_url}/models",
                 },
-                "models": {
-                    filename: {
-                        "id": filename,
-                        "name": filename,
-                        "contextWindow": 8192,
-                        "maxInputTokens": 8192,
-                        "capabilities": ["streaming", "tools"],
-                        "supportsVision": False,
-                        "supportsAttachments": False,
-                        "supportsReasoning": False,
-                    }
-                }
+                "models": all_models.copy()
             }
 
         self._models_file.write_text(json.dumps(data, indent=2) + "\n")

@@ -8,11 +8,13 @@ services:
     security_opt:
       - label=disable
     ports:
-      - "8081:8080"
+      - "${LLAMA_PORT:-8081}:8080"
     volumes:
       - llama_models:/models
     environment:
       LLAMA_MODEL: ${LLAMA_MODEL:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
+      N_GPU_LAYERS: ${N_GPU_LAYERS:-999}
+      CTX_SIZE: ${CTX_SIZE:-8192}
     command:
       - --model
       - /models/${LLAMA_MODEL:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
@@ -21,65 +23,9 @@ services:
       - --port
       - "8080"
       - --n-gpu-layers
-      - "999"
+      - "${N_GPU_LAYERS:-999}"
       - --ctx-size
-      - "8192"
-    networks:
-      - ai-net
-
-  llama-qwen3:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda
-    container_name: llama-qwen3
-    profiles:
-      - extra
-    restart: unless-stopped
-    devices:
-      - nvidia.com/gpu=all
-    security_opt:
-      - label=disable
-    ports:
-      - "8082:8080"
-    volumes:
-      - llama_models:/models
-    command:
-      - --model
-      - /models/Qwen3-14B-Q4_K_M.gguf
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8080"
-      - --n-gpu-layers
-      - "10"
-      - --ctx-size
-      - "8192"
-    networks:
-      - ai-net
-
-  llama-devs:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda
-    container_name: llama-devs
-    profiles:
-      - extra
-    restart: unless-stopped
-    devices:
-      - nvidia.com/gpu=all
-    security_opt:
-      - label=disable
-    ports:
-      - "8083:8080"
-    volumes:
-      - llama_models:/models
-    command:
-      - --model
-      - /models/mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8080"
-      - --n-gpu-layers
-      - "20"
-      - --ctx-size
-      - "4096"
+      - "${CTX_SIZE:-8192}"
     networks:
       - ai-net
 

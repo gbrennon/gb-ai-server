@@ -1,12 +1,23 @@
-"""Outbound port - container runtime detector."""
+"""Outbound port - container runtime detector and detection result."""
 
-from typing import Protocol, TYPE_CHECKING
+from dataclasses import dataclass
+from typing import Protocol
 
-if TYPE_CHECKING:
-    from .container_runtime import ContainerRuntime
+from .container_runtime import ContainerRuntime
+from .container_inspector import ContainerInspector
+from .container_operator import ContainerOperator
+
+
+@dataclass
+class RuntimeDetection:
+    """Result of container runtime detection."""
+
+    runtime: ContainerRuntime
+    inspector: ContainerInspector
+    operator: ContainerOperator
 
 
 class RuntimeDetector(Protocol):
     """Protocol for detecting available container runtime."""
 
-    def detect(self) -> "ContainerRuntime": ...
+    def detect(self) -> RuntimeDetection: ...

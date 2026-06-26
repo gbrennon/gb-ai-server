@@ -1,12 +1,11 @@
 """Outbound port - compose tool detector."""
 
-from typing import Protocol, TYPE_CHECKING
+from typing import Protocol
 
-if TYPE_CHECKING:
-    from .compose_tool import ComposeTool
+from .compose_detection import ComposeDetection
 
 
 class ComposeToolDetector(Protocol):
     """Protocol for detecting available compose tool."""
 
-    def detect(self) -> "ComposeTool": ...
+    def detect(self) -> ComposeDetection: ...

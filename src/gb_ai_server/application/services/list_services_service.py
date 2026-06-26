@@ -3,21 +3,26 @@
 from pathlib import Path
 
 from ..ports.outbound.logger import Logger
-from ..ports.outbound import ComposeTool
+from ..ports.outbound import ComposeQuery
 from ..dtos.requests.list_services_request import ListServicesRequest
 from ..dtos.responses.list_services_response import ListServicesResponse
+from ..utils import print_section
 
 
 class ListServicesService:
     """List running services using compose tool."""
 
-    def __init__(self, logger: Logger, compose_tool: ComposeTool) -> None:
+    def __init__(self, logger: Logger, compose_query: ComposeQuery | None = None) -> None:
         self.logger = logger
-        self.compose_tool = compose_tool
+        self.compose_query = compose_query
 
     def execute(self, request: ListServicesRequest) -> ListServicesResponse:
-        self.logger.section("Service Status")
-        result = self.compose_tool.ps(Path(request.compose_file))
+        if not self.compose_query:
+            self.logger.error("Compose query tool is not available. Cannot list services.")
+            return ListServicesResponse(False)
+
+        print_section("Service Status")
+        result = self.compose_query.ps(Path(request.compose_file))
         if result.success:
             output = result.stdout
             print(output)
