@@ -119,7 +119,7 @@ class ClineModelRegistrar:
             # Register the custom provider ID with container name
             data["providers"][provider_id] = {
                 "settings": {
-                    "provider": provider_id,
+                    "provider": "openai-compatible",
                     "model": filename,
                     "baseUrl": f"{base_url}/v1",
                     "apiKey": "dummy",
@@ -130,6 +130,31 @@ class ClineModelRegistrar:
                 "updatedAt": now,
                 "tokenSource": "migration",
             }
+
+            # Register the built-in compatible provider IDs ONLY if they do not exist
+            # or if they are currently pointing to localhost (safe to overwrite)
+            cli_provider_id = "openai-compatible" if idx == 0 else "openai-native"
+            should_write_cli = True
+            if cli_provider_id in data["providers"]:
+                settings = data["providers"][cli_provider_id].get("settings", {})
+                existing_url = settings.get("baseUrl", "")
+                if existing_url and "localhost" not in existing_url and "127.0.0.1" not in existing_url:
+                    should_write_cli = False
+
+            if should_write_cli:
+                data["providers"][cli_provider_id] = {
+                    "settings": {
+                        "provider": cli_provider_id,
+                        "model": filename,
+                        "baseUrl": f"{base_url}/v1",
+                        "apiKey": "dummy",
+                        "reasoning": {
+                            "enabled": False,
+                        },
+                    },
+                    "updatedAt": now,
+                    "tokenSource": "migration",
+                }
 
         self._providers_file.write_text(json.dumps(data, indent=2) + "\n")
 
@@ -217,6 +242,28 @@ class ClineModelRegistrar:
                 data = json.loads(self._state_file.read_text())
             except json.JSONDecodeError:
                 data = {}
+
+        # If the active provider is "llama-coder" (which is invalid in TUI/CLI),
+        # automatically change it to "openai-compatible" so the TUI/CLI can run.
+        provider_id = "openai-compatible"
+        current_provider = data.get("apiProvider", "")
+        if current_provider == "llama-coder":
+            data["apiProvider"] = provider_id
+            data["actModeApiProvider"] = provider_id
+            data["planModeApiProvider"] = provider_id
+            data["api-provider"] = provider_id
+            data["act-mode-api-provider"] = provider_id
+            data["plan-mode-api-provider"] = provider_id
+
+            first_display_name, first_filename, first_port, first_container = models[0]
+            data["openAiModelId"] = first_filename
+            data["actModeOpenAiModelId"] = first_filename
+            data["planModeOpenAiModelId"] = first_filename
+            data["open-ai-model-id"] = first_filename
+            data["act-mode-open-ai-model-id"] = first_filename
+            data["plan-mode-open-ai-model-id"] = first_filename
+            data["openAiBaseUrl"] = f"http://localhost:{first_port}/v1"
+            data["open-ai-base-url"] = f"http://localhost:{first_port}/v1"
 
         for idx, (display_name, filename, port, container_name) in enumerate(models):
             provider_ids = [container_name]
