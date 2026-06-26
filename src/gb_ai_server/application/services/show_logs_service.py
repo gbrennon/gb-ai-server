@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from ..ports.outbound.logger import Logger
-from ..ports.outbound import ComposeTool
+from ..ports.outbound import ComposeQuery
 from ..dtos.requests.show_logs_request import ShowLogsRequest
 from ..dtos.responses.show_logs_response import ShowLogsResponse
 
@@ -11,12 +11,16 @@ from ..dtos.responses.show_logs_response import ShowLogsResponse
 class ShowLogsService:
     """Show service logs using compose tool."""
 
-    def __init__(self, logger: Logger, compose_tool: ComposeTool) -> None:
+    def __init__(self, logger: Logger, compose_query: ComposeQuery | None = None) -> None:
         self.logger = logger
-        self.compose_tool = compose_tool
+        self.compose_query = compose_query
 
     def execute(self, request: ShowLogsRequest) -> ShowLogsResponse:
-        result = self.compose_tool.logs(
+        if not self.compose_query:
+            self.logger.error("Compose query tool is not available. Cannot retrieve logs.")
+            return ShowLogsResponse(False)
+
+        result = self.compose_query.logs(
             Path(request.compose_file),
             service=request.service,
             follow=request.follow,
