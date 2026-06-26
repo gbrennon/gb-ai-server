@@ -192,4 +192,18 @@ class ClineModelRegistrar:
                 "models": all_models.copy()
             }
 
+            # Also register under the built-in compatible provider IDs so the select box has them
+            cli_provider_id = "openai-compatible" if idx == 0 else "openai-native"
+            data["providers"][cli_provider_id] = {
+                "provider": {
+                    "name": "OpenAI Compatible" if idx == 0 else "OpenAI Native",
+                    "baseUrl": f"{base_url}/v1",
+                    "defaultModelId": default_model_id,
+                    "protocol": "openai-chat",
+                    "client": "openai-compatible",
+                    "modelsSourceUrl": f"{base_url}/models",
+                },
+                "models": all_models.copy()
+            }
+
         self._models_file.write_text(json.dumps(data, indent=2) + "\n")
