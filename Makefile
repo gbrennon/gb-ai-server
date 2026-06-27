@@ -63,7 +63,7 @@ logs:
 	$(COMPOSE) logs -f
 
 logs-coder:
-	$(COMPOSE) logs -f llama-coder
+	$(COMPOSE) logs -f llama
 
 # GPU verification
 check-cdi:

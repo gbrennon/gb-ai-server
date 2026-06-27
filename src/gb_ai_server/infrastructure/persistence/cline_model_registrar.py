@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ...application.ports.outbound.logger import Logger
+from ...domain.resource_requirements_mapper import ResourceRequirementsMapper
 
 
 class ClineModelRegistrar:
@@ -15,15 +16,21 @@ class ClineModelRegistrar:
 
     Writes to:
       - ~/.cline/data/settings/providers.json  — provider entries with base URLs
-      - ~/.cline/data/globalState.json          — active provider and model
+      - ~/.cline/data/settings/models.json     — provider models catalog
+      - ~/.cline/data/globalState.json          — provider model mappings
+      - ~/.cline/data/secrets.json              — API keys
     """
+
+    PROVIDER_ID = "openai-compatible"
 
     def __init__(
         self,
         logger: Logger,
         cline_data_dir: str | Path | None = None,
+        api_key: str | None = None,
     ) -> None:
         self.logger = logger
+        self._api_key = api_key or os.environ.get("OPENAI_API_KEY", "dummy")
         cline_home = (
             Path(cline_data_dir)
             if cline_data_dir
@@ -34,31 +41,27 @@ class ClineModelRegistrar:
         self._providers_file = self._settings_dir / "providers.json"
         self._models_file = self._settings_dir / "models.json"
         self._state_file = cline_home / "globalState.json"
+        self._secrets_file = cline_home / "secrets.json"
 
-    def register_models(
+    def register_model(
         self,
-        models: list[tuple[str, str, int, str]],
+        model: tuple[str, str, int, str],
         provider_base_url: str | None = None,
     ) -> bool:
-        if not models:
-            self.logger.warn("No models to register with Cline")
+        if model is None:
+            self.logger.warn("No model to register with Cline")
             return False
 
         try:
-            self._update_providers(models, provider_base_url)
-            self._update_models(models, provider_base_url)
+            self._update_providers(model, provider_base_url)
+            self._update_models(model, provider_base_url)
+            self._update_global_state(model)
+            self._update_secrets()
 
-            first_display_name, first_filename, first_port, first_container = models[0]
-            first_base_url = provider_base_url or f"http://localhost:{first_port}"
-            # Use non-prefixed model ID for global state (like ollama provider)
-            self._update_global_state(first_display_name, first_filename, first_base_url, first_container)
-
-            self.logger.ok(
-                f"Registered {len(models)} model(s) with Cline"
-            )
+            self.logger.ok("Registered model with Cline")
             return True
         except Exception as e:
-            self.logger.warn(f"Failed to register models with Cline: {e}")
+            self.logger.warn(f"Failed to register model with Cline: {e}")
             return False
 
     def is_registered(self, model_name: str) -> bool:
@@ -78,21 +81,17 @@ class ClineModelRegistrar:
                 or data.get("openAiModelId")
                 or data.get("open-ai-model-id")
             )
-            # Check if provider is a llama container (starts with "llama-")
-            # Model ID in state is non-prefixed (like ollama provider)
-            # Accept both prefixed and non-prefixed model names for backward compatibility
             if model_id == model_name:
                 return True
-            # Check if model_name is provider-prefixed and matches
-            if provider and provider.startswith("llama-") and model_name.startswith(f"{provider}/"):
-                return model_id == model_name.removeprefix(f"{provider}/")
-            return provider is not None and provider.startswith("llama-") and model_id == model_name
+            if provider == self.PROVIDER_ID and model_id == model_name:
+                return True
+            return provider is not None and model_id == model_name
         except Exception:
             return False
 
     def _update_providers(
         self,
-        models: list[tuple[str, str, int, str]],
+        model: tuple[str, str, int, str],
         provider_base_url: str | None = None,
     ) -> None:
         data: dict = {}
@@ -107,88 +106,35 @@ class ClineModelRegistrar:
         if "providers" not in data:
             data["providers"] = {}
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
-        # Remove legacy keys
-        if "providers" in data:
-            for key in list(data["providers"].keys()):
-                if key.startswith("local llama") or key.startswith("local-llama"):
-                    data["providers"].pop(key, None)
+        display_name, filename, port, container_name = model[0], model[1], model[2], model[3]
+        base_url = provider_base_url or f"http://localhost:{port}"
 
-        for idx, (display_name, filename, port, container_name) in enumerate(models):
-            # Use container name for provider ID (e.g., "llama-coder", "llama-qwen3")
-            provider_id = container_name if idx == 0 else f"{container_name}"
-            base_url = provider_base_url or f"http://localhost:{port}"
+        data["lastUsedProvider"] = self.PROVIDER_ID
 
-            if idx == 0:
-                data["lastUsedProvider"] = provider_id
+        existing_settings = (
+            data["providers"].get(self.PROVIDER_ID, {}).get("settings", {})
+        )
 
-            # Register the custom provider ID with container name
-            data["providers"][provider_id] = {
-                "settings": {
-                    "provider": provider_id,
-                    "model": filename,
-                    "baseUrl": f"{base_url}/v1",
-                    "apiKey": "dummy",
-                    "reasoning": {
-                        "enabled": False,
-                    },
-                },
-                "updatedAt": now,
-                "tokenSource": "migration",
-            }
-
-            # Register the corresponding built-in CLI compatibility provider ID
-            cli_provider_id = "openai-compatible" if idx == 0 else "openai-native"
-            data["providers"][cli_provider_id] = {
-                "settings": {
-                    "provider": cli_provider_id,
-                    "model": filename,
-                    "baseUrl": f"{base_url}/v1",
-                    "apiKey": "dummy",
-                    "reasoning": {
-                        "enabled": False,
-                    },
-                },
-                "updatedAt": now,
-                "tokenSource": "migration",
-            }
+        data["providers"][self.PROVIDER_ID] = {
+            "settings": {
+                "provider": self.PROVIDER_ID,
+                "apiKey": existing_settings.get("apiKey", self._api_key),
+                "model": container_name,
+                "baseUrl": f"{base_url}/v1",
+                "timeout": existing_settings.get("timeout", 30000),
+                "reasoning": existing_settings.get("reasoning", {"budgetTokens": 1024}),
+            },
+            "updatedAt": now,
+            "tokenSource": existing_settings.get("tokenSource", "migration"),
+        }
 
         self._providers_file.write_text(json.dumps(data, indent=2) + "\n")
 
-    def _update_global_state(self, display_name: str, model_name: str, base_url: str, container_name: str) -> None:
-        data: dict = {}
-        if self._state_file.exists():
-            try:
-                data = json.loads(self._state_file.read_text())
-            except json.JSONDecodeError:
-                data = {}
-
-        provider_id = container_name
-
-        # Set camelCase keys
-        data["apiProvider"] = provider_id
-        data["actModeApiProvider"] = provider_id
-        data["planModeApiProvider"] = provider_id
-        data["openAiModelId"] = model_name
-        data["actModeOpenAiModelId"] = model_name
-        data["planModeOpenAiModelId"] = model_name
-        data["openAiBaseUrl"] = f"{base_url}/v1"
-
-        # Set kebab-case keys for CLI compatibility
-        data["api-provider"] = provider_id
-        data["act-mode-api-provider"] = provider_id
-        data["plan-mode-api-provider"] = provider_id
-        data["open-ai-model-id"] = model_name
-        data["act-mode-open-ai-model-id"] = model_name
-        data["plan-mode-open-ai-model-id"] = model_name
-        data["open-ai-base-url"] = f"{base_url}/v1"
-
-        self._state_file.write_text(json.dumps(data, indent=2) + "\n")
-
     def _update_models(
         self,
-        models: list[tuple[str, str, int, str]],
+        model: tuple[str, str, int, str],
         provider_base_url: str | None = None,
     ) -> None:
         data: dict = {}
@@ -203,61 +149,129 @@ class ClineModelRegistrar:
         if "providers" not in data:
             data["providers"] = {}
 
-        # Remove legacy root-level provider keys if they exist
-        for key in list(data.keys()):
-            if key.startswith("local llama") or key.startswith("local-llama"):
-                data.pop(key, None)
+        display_name, filename, port, container_name = model[0], model[1], model[2], model[3]
+        ctx_size = ResourceRequirementsMapper.context_size_for_model(filename)
 
-        if "providers" in data:
-            for key in list(data["providers"].keys()):
-                if key.startswith("local llama") or key.startswith("local-llama"):
-                    data["providers"].pop(key, None)
+        base_url = provider_base_url or f"http://localhost:{port}"
 
-        # Build all models dict with non-prefixed IDs (e.g., "model.gguf") like ollama provider
-        all_models: dict[str, dict] = {}
-        for display_name, filename, port, container_name in models:
-            all_models[filename] = {
-                "id": filename,
-                "name": filename,
-                "contextWindow": 8192,
-                "maxInputTokens": 8192,
-                "capabilities": ["streaming", "tools"],
-                "supportsVision": False,
-                "supportsAttachments": False,
-                "supportsReasoning": False,
-            }
+        provider_config = data["providers"].get(self.PROVIDER_ID, {})
+        existing_provider = provider_config.get("provider", {})
+        existing_models = self._normalize_models(provider_config.get("models", []))
 
-        # Register each container as a provider with ALL models
-        for idx, (display_name, filename, port, container_name) in enumerate(models):
-            # Use container name for provider ID (e.g., "llama-coder", "llama-qwen3")
-            provider_id = container_name
-            base_url = provider_base_url or f"http://localhost:{port}"
-            default_model_id = filename  # Non-prefixed like ollama provider
+        model_entry = {
+            "id": container_name,
+            "name": display_name,
+            "contextWindow": ctx_size,
+            "maxInputTokens": ctx_size,
+            "supportsImages": False,
+            "capabilities": ["streaming"],
+        }
 
-            data["providers"][provider_id] = {
-                "provider": {
-                    "name": provider_id,
-                    "baseUrl": f"{base_url}/v1",
-                    "defaultModelId": default_model_id,
-                    "protocol": "openai-chat",
-                    "client": "openai-compatible",
-                    # llama.cpp has /models endpoint for model discovery
-                    "modelsSourceUrl": f"{base_url}/models",
-                },
-                "models": all_models.copy()
-            }
+        merged_models = [m for m in existing_models if m.get("id") != container_name] + [model_entry]
 
-            cli_provider_id = "openai-compatible" if idx == 0 else "openai-native"
-            data["providers"][cli_provider_id] = {
-                "provider": {
-                    "name": "OpenAI Compatible" if idx == 0 else "OpenAI Native",
-                    "baseUrl": f"{base_url}/v1",
-                    "defaultModelId": default_model_id,
-                    "protocol": "openai-chat",
-                    "client": "openai-compatible",
-                    "modelsSourceUrl": f"{base_url}/models",
-                },
-                "models": all_models.copy()
-            }
+        data["providers"][self.PROVIDER_ID] = {
+            "provider": {
+                **existing_provider,
+                "name": existing_provider.get("name", "OpenAI Compatible"),
+                "baseUrl": f"{base_url}/v1",
+                "defaultModelId": existing_provider.get("defaultModelId", container_name),
+            },
+            "models": merged_models,
+        }
+
+        for pid in list(data["providers"].keys()):
+            if pid != self.PROVIDER_ID:
+                provider_data = data["providers"][pid]
+                p = provider_data.get("provider", {})
+                if p.get("type") == "openai-compatible" or p.get("client") == "openai-compatible":
+                    existing = self._normalize_models(provider_data.get("models", []))
+                    merged = [m for m in existing if m.get("id") != container_name] + [model_entry]
+                    data["providers"][pid] = {
+                        **provider_data,
+                        "models": merged,
+                    }
 
         self._models_file.write_text(json.dumps(data, indent=2) + "\n")
+
+    def _update_global_state(
+        self,
+        model: tuple[str, str, int, str]
+    ) -> None:
+        data: dict = {}
+        if self._state_file.exists():
+            try:
+                data = json.loads(self._state_file.read_text())
+            except json.JSONDecodeError:
+                data = {}
+
+        display_name, filename, port, container_name = model[0], model[1], model[2], model[3]
+
+        data["apiProvider"] = self.PROVIDER_ID
+        data["actModeApiProvider"] = self.PROVIDER_ID
+        data["planModeApiProvider"] = self.PROVIDER_ID
+        data["api-provider"] = self.PROVIDER_ID
+        data["act-mode-api-provider"] = self.PROVIDER_ID
+        data["plan-mode-api-provider"] = self.PROVIDER_ID
+
+        data["openAiModelId"] = container_name
+        data["actModeOpenAiModelId"] = container_name
+        data["planModeOpenAiModelId"] = container_name
+        data["open-ai-model-id"] = container_name
+        data["act-mode-open-ai-model-id"] = container_name
+        data["plan-mode-open-ai-model-id"] = container_name
+
+        data["openAiBaseUrl"] = f"http://localhost:{port}/v1"
+        data["open-ai-base-url"] = f"http://localhost:{port}/v1"
+
+        data["openAiApiKey"] = self._api_key
+
+        provider_ids = [container_name, self.PROVIDER_ID]
+
+        for pid in provider_ids:
+            data[f"{pid}-model-id"] = container_name
+            data[f"act-mode-{pid}-model-id"] = container_name
+            data[f"plan-mode-{pid}-model-id"] = container_name
+
+            cc_pid = self._to_camel_case(pid)
+            data[f"{cc_pid}ModelId"] = container_name
+            data[f"actMode{self._capitalize_first(cc_pid)}ModelId"] = container_name
+            data[f"planMode{self._capitalize_first(cc_pid)}ModelId"] = container_name
+
+        self._state_file.write_text(json.dumps(data, indent=2) + "\n")
+
+    def _update_secrets(self) -> None:
+        data: dict = {}
+        if self._secrets_file.exists():
+            try:
+                data = json.loads(self._secrets_file.read_text())
+            except json.JSONDecodeError:
+                data = {}
+
+        data["openAiApiKey"] = self._api_key
+
+        self._secrets_file.write_text(json.dumps(data, indent=2) + "\n")
+
+    @staticmethod
+    def _normalize_models(models: list | dict) -> list:
+        if isinstance(models, list):
+            return models
+        return list(models.values())
+
+    def _to_camel_case(self, s: str) -> str:
+        parts = s.split("-")
+        processed_parts = []
+        for p in parts:
+            if p == "openai":
+                processed_parts.append("openAi")
+            else:
+                processed_parts.append(p)
+
+        res = processed_parts[0]
+        for p in processed_parts[1:]:
+            res += p.capitalize()
+        return res
+
+    def _capitalize_first(self, s: str) -> str:
+        if not s:
+            return s
+        return s[0].upper() + s[1:]

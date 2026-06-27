@@ -1,37 +1,88 @@
 services:
   llama:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
-    container_name: llama-coder
-    restart: unless-stopped
+    container_name: ${LLAMA_CONTAINER_NAME}
+
+    restart_policy:
+      condition: on-failure
+      max_retries: 3
+      delay: 10s
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 3s
+      timeout: 1s
+      retries: 10
+      start_period: 15s
+
     devices:
       - nvidia.com/gpu=all
-    security_opt:
-      - label=disable
-    ports:
-      - "${LLAMA_PORT:-8081}:8080"
-    volumes:
-      - llama_models:/models
+
     environment:
-      LLAMA_MODEL: ${LLAMA_MODEL:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
+      CUDA_VISIBLE_DEVICES: "0"
+      LLAMA_MODEL: ${LLAMA_MODEL}
       N_GPU_LAYERS: ${N_GPU_LAYERS:-999}
-      CTX_SIZE: ${CTX_SIZE:-8192}
+      CTX_SIZE: ${CTX_SIZE:-32768}
+      N_THREADS: ${N_THREADS:-8}
+      N_THREADS_BATCH: ${N_THREADS_BATCH:-8}
+
     command:
       - --model
-      - /models/${LLAMA_MODEL:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
+      - /models/${LLAMA_MODEL}
       - --host
-      - 0.0.0.0
+      - "0.0.0.0"
       - --port
       - "8080"
       - --n-gpu-layers
-      - "${N_GPU_LAYERS:-999}"
+      - "${N_GPU_LAYERS}"
       - --ctx-size
-      - "${CTX_SIZE:-8192}"
+      - "${CTX_SIZE}"
+
+    ports:
+      - "127.0.0.1:${LLAMA_PORT:-8081}:8080"
+
+    volumes:
+      - llama_models:/models:rw
+
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 12G
+        reservations:
+          cpus: '2'
+          memory: 8G
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=${LLAMA_CONTAINER_NAME},environment=${ENVIRONMENT:-dev}"
+
+    security_opt:
+      - no-new-privileges:true
+      - label=disable
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+    labels:
+      com.example.service: "${LLAMA_CONTAINER_NAME}"
+      com.example.version: "1.0"
+      com.example.environment: "${ENVIRONMENT:-dev}"
+      com.example.description: "Local LLM inference server (${LLAMA_MODEL}) with CUDA acceleration"
+
     networks:
       - ai-net
 
 volumes:
   llama_models:
     driver: local
+    labels:
+      backup: "daily"
+      description: "LLaMA.cpp model storage"
 
 networks:
   ai-net:

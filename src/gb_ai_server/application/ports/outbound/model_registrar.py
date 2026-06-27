@@ -4,11 +4,11 @@ from typing import Protocol
 
 
 class ModelRegistrar(Protocol):
-    """Register local models with agentic coding tools."""
+    """Register a local model with agentic coding tools."""
 
-    def register_models(
+    def register_model(
         self,
-        models: list[tuple[str, str, int, str]],
+        model: tuple[str, str, int, str],
         provider_base_url: str | None = None,
     ) -> bool:
         ...

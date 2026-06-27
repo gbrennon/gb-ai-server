@@ -46,7 +46,6 @@ class HuggingFaceModelDownloader:
 
             using_hf_transfer = False
             try:
-                import hf_transfer  # noqa: F401
                 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
                 using_hf_transfer = True
             except ImportError:

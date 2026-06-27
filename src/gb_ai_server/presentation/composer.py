@@ -97,10 +97,13 @@ class BootstrapCompositionRoot:
 
             prereqs = self._verify_prerequisites(env)
 
-            running_model = self._detect_running_model(prereqs.inspector)
+            running_model = self._detect_running_model(prereqs.inspector, model)
             if running_model is not None:
                 if running_model == model.filename:
+                    _, _, port = self._get_service_info(model)
                     self._model_selection_presenter.model_already_running(model.display_name)
+                    self._register_models(args, model)
+                    self._service_presenter.report_success(port=port)
                     return 0
                 self._model_selection_presenter.switching_model(
                     self._model_name_for_filename(all_models, running_model),
@@ -109,12 +112,13 @@ class BootstrapCompositionRoot:
                 self._stop_running_service(prereqs.compose_lifecycle, env)
 
             self._download_models(args, model)
-            self._start_services(prereqs.compose_lifecycle, env)
+            self._start_services(prereqs.compose_lifecycle, env, model)
             self._copy_models(prereqs.inspector, prereqs.operator, model, args)
-            self._restart_services(prereqs.compose_lifecycle, env)
+            self._restart_services(prereqs.compose_lifecycle, env, model)
             self._verify_health(args, model)
             self._register_models(args, model)
-            self._service_presenter.report_success(port=DEFAULT_PORT)
+            _, _, port = self._get_service_info(model)
+            self._service_presenter.report_success(port=port)
             return 0
         except SystemExit:
             return 1
@@ -162,19 +166,23 @@ class BootstrapCompositionRoot:
                 return m.display_name
         return filename
 
+    def _get_service_info(self, model: ModelEntry) -> tuple[str, str, int]:
+        return (COMPOSE_SERVICE_NAME, CONTAINER_NAME, DEFAULT_PORT)
+
     def _set_model_env(self, model: ModelEntry) -> None:
         os.environ["LLAMA_MODEL"] = model.filename
         os.environ["N_GPU_LAYERS"] = str(model.n_gpu_layers)
         os.environ["CTX_SIZE"] = str(model.ctx_size)
 
     def _detect_running_model(
-        self, inspector: ContainerInspector | None
+        self, inspector: ContainerInspector | None, model: ModelEntry
     ) -> str | None:
         if inspector is None:
             return None
-        if not inspector.is_running(CONTAINER_NAME):
+        _, container_name, _ = self._get_service_info(model)
+        if not inspector.is_running(container_name):
             return None
-        current_model = inspector.get_env(CONTAINER_NAME, "LLAMA_MODEL")
+        current_model = inspector.get_env(container_name, "LLAMA_MODEL")
         return current_model or None
 
     def _stop_running_service(
@@ -218,12 +226,13 @@ class BootstrapCompositionRoot:
             self._download_presenter.all_downloads_failed()
             raise SystemExit(1)
 
-    def _start_services(self, compose_lifecycle: ComposeLifecycle | None, env) -> None:
+    def _start_services(self, compose_lifecycle: ComposeLifecycle | None, env, model: ModelEntry) -> None:
+        service_name, _, _ = self._get_service_info(model)
         service = self._compose.start_services(compose_lifecycle)
         if not service.execute(
             StartServicesRequest(
                 compose_file=str(env.paths.compose_file),
-                services=(COMPOSE_SERVICE_NAME,),
+                services=(service_name,),
             )
         ).success:
             self._service_presenter.start_services_failed()
@@ -236,24 +245,26 @@ class BootstrapCompositionRoot:
         model: ModelEntry,
         args: Namespace,
     ) -> None:
+        _, container_name, _ = self._get_service_info(model)
         service = self._models.model_copier(inspector, operator)
         response = service.execute(
             CopyModelsRequest(
                 entries=[(model.display_name, model.filename, model.url)],
                 source_dir=str(args.models_dir),
-                container_name=CONTAINER_NAME,
+                container_name=container_name,
                 dest_dir="/models",
             )
         )
         if not any(response.results.values()):
             self._download_presenter.copy_models_failed()
 
-    def _restart_services(self, compose_lifecycle: ComposeLifecycle | None, env) -> None:
+    def _restart_services(self, compose_lifecycle: ComposeLifecycle | None, env, model: ModelEntry) -> None:
+        service_name, _, _ = self._get_service_info(model)
         service = self._compose.restart_services(compose_lifecycle)
         if not service.execute(
             RestartServicesRequest(
                 compose_file=str(env.paths.compose_file),
-                services=(COMPOSE_SERVICE_NAME,),
+                services=(service_name,),
             )
         ).success:
             self._service_presenter.restart_failed()
@@ -263,10 +274,11 @@ class BootstrapCompositionRoot:
         if args.skip_health:
             return
 
+        _, _, port = self._get_service_info(model)
         service = self._verifiers.health_verifier()
         if not service.execute(
             VerifyHealthRequest(
-                ports=(DEFAULT_PORT,),
+                ports=(port,),
                 timeout_seconds=120,
                 interval_seconds=5,
             )
@@ -283,12 +295,11 @@ class BootstrapCompositionRoot:
         registrar = ClineModelRegistrar(self._infra.logger)
         service = self._models.model_registrar(registrar)
 
-        model_tuples = [
-            (model.display_name, model.filename, DEFAULT_PORT, CONTAINER_NAME)
-        ]
+        _, container_name, port = self._get_service_info(model)
+        model_tuple = (model.display_name, model.filename, port, container_name)
 
         from gb_ai_server.application.dtos.requests.register_models_request import RegisterModelsRequest
-        request = RegisterModelsRequest(models=model_tuples)
+        request = RegisterModelsRequest(model=model_tuple)
         response = service.execute(request)
         if response.success:
             self._registration_presenter.models_registered([model.display_name])
