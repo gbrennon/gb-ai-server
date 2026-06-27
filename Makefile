@@ -1,4 +1,4 @@
-.PHONY: help up down logs status ps models check-cdi clean restart bootstrap bootstrap-dry bootstrap-quick bootstrap-coder bootstrap-qwen3 bootstrap-devs register-models register-models-quick clean-all list-models
+.PHONY: help up down logs status ps models check-cdi clean restart bootstrap bootstrap-dry bootstrap-quick bootstrap-coder bootstrap-qwen3 bootstrap-devs coder devstral register-models register-models-quick clean-all list-models
 
 COMPOSE_FILE := docker-compose.yml
 ENV_FILE := .env
@@ -31,6 +31,10 @@ help:
 	@echo "  bootstrap-devs  Devstral Small 2 24B"
 	@echo "  bootstrap-dry   Dry-run mode (preview only)"
 	@echo "  bootstrap-quick Skip download & health check (faster)"
+	@echo ""
+	@echo "Reasoning (slow, high quality):"
+	@echo "  devstral        Devstral Small 2 24B (22 GPU layers, 16K ctx)"
+	@echo "  coder           qwen2.5-coder 7B (full GPU, fast)"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  clean           Remove all containers (keeps volumes)"
@@ -95,6 +99,28 @@ register-models-quick:
 # List available models
 list-models:
 	uv run gb-ai-server --list-models
+
+# Reasoning mode — launch devstral-24B with optimized GPU layer count
+DEVSTRAL_MODEL := mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf
+DEVSTRAL_N_GPU := 22
+DEVSTRAL_CTX := 16384
+
+devstral:
+	$(COMPOSE) down 2>/dev/null; \
+	N_GPU_LAYERS=$(DEVSTRAL_N_GPU) CTX_SIZE=$(DEVSTRAL_CTX) LLAMA_MODEL=$(DEVSTRAL_MODEL) $(COMPOSE) up -d; \
+	echo "✓ Devstral started (22 GPU / 16K ctx)"; \
+	$(MAKE) register-models-quick
+
+# Fast coding mode — qwen2.5-coder 7B with full GPU offload
+CODER_MODEL := qwen2.5-coder-7b-instruct-q4_k_m.gguf
+CODER_N_GPU := 999
+CODER_CTX := 32768
+
+coder:
+	$(COMPOSE) down 2>/dev/null; \
+	N_GPU_LAYERS=$(CODER_N_GPU) CTX_SIZE=$(CODER_CTX) LLAMA_MODEL=$(CODER_MODEL) $(COMPOSE) up -d; \
+	echo "✓ Coder started (7B, full GPU)"; \
+	$(MAKE) register-models-quick
 
 # Bootstrap — orchestrate the full llama.cpp bootstrap via uv
 bootstrap:
