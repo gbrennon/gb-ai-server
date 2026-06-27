@@ -41,7 +41,7 @@ def mock_cline_registrar() -> MagicMock:
 
 @pytest.fixture
 def mock_models() -> list[ModelEntry]:
-    return [ModelEntry("qwen:7b", "qwen.gguf", "https://example.com/q")]
+    return [ModelEntry("qwen3:14b", "qwen.gguf", "https://example.com/q")]
 
 
 def _make_mock_service(execute_result: CommandResult | None = None) -> MagicMock:
@@ -339,6 +339,35 @@ class TestBootstrapCompositionRoot:
         request = execute_call.call_args[0][0]
         assert request.compose_file == str(mock_env.paths.compose_file)
         assert request.services == ("llama",)
+
+    def test_when_model_already_running_registers_and_returns_zero(
+        self, mock_env: MagicMock, mock_models: list[ModelEntry]
+    ) -> None:
+        args = _default_args()
+        container = _make_mock_container()
+
+        # Mock that the model is already running by returning the filename
+        # from inspector.get_env
+        verifier_execute_result = container.prerequisite_verifier.return_value.execute.return_value
+        verifier_execute_result.inspector.is_running.return_value = True
+        verifier_execute_result.inspector.get_env.return_value = mock_models[0].filename
+
+        with (
+            patch.object(
+                BootstrapCompositionRoot, "_setup_environment", return_value=mock_env
+            ),
+            patch.object(
+                BootstrapCompositionRoot,
+                "_load_models_config",
+                return_value=mock_models,
+            ),
+            patch("gb_ai_server.presentation.composer.Path.exists", return_value=True),
+        ):
+            root = BootstrapCompositionRoot(container)
+            assert root.run(args) == 0
+
+        # Verify that model registrar was executed anyway
+        container.model_registrar.return_value.execute.assert_called_once()
 
     def test_catches_unexpected_exception(self, mock_env: MagicMock) -> None:
         args = _default_args(skip_download=True, skip_health=True)
