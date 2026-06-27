@@ -10,14 +10,14 @@ from tests.gb_ai_server.conftest import make_logger_mock
 
 
 class TestClineModelRegistrar:
+    MODEL = ("model-a", "a.gguf", 8081, "llama-coder")
+
     def test_creates_providers_file(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
         cline_data = tmp_path / "cline" / "data"
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
-        result = registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
-        )
+        result = registrar.register_model(model=self.MODEL)
 
         assert result is True
         providers_file = cline_data / "settings" / "providers.json"
@@ -27,41 +27,8 @@ class TestClineModelRegistrar:
         assert data["lastUsedProvider"] == "openai-compatible"
         provider = data["providers"]["openai-compatible"]
         assert provider["settings"]["baseUrl"] == "http://localhost:8081/v1"
-        assert provider["settings"]["model"] == "a.gguf"
+        assert provider["settings"]["model"] == "llama-coder"
         assert provider["settings"]["provider"] == "openai-compatible"
-        
-        # Check custom container provider is also written
-        assert "llama-coder" in data["providers"]
-
-    def test_updates_global_state_without_overwriting_provider(self, tmp_path: Path) -> None:
-        logger = make_logger_mock()
-        cline_data = tmp_path / "cline" / "data"
-        cline_data.mkdir(parents=True, exist_ok=True)
-        state_file = cline_data / "globalState.json"
-        state_file.write_text(
-            json.dumps({
-                "apiProvider": "cline",
-                "actModeApiProvider": "cline",
-            })
-        )
-
-        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
-        )
-
-        data = json.loads(state_file.read_text())
-        # The active provider must NOT be changed to llama-coder
-        assert data["apiProvider"] == "cline"
-        assert data["actModeApiProvider"] == "cline"
-
-        # The model ID keys for llama-coder and openai-compatible MUST be set
-        assert data["llamaCoderModelId"] == "a.gguf"
-        assert data["actModeLlamaCoderModelId"] == "a.gguf"
-        assert data["planModeLlamaCoderModelId"] == "a.gguf"
-        assert data["openAiCompatibleModelId"] == "a.gguf"
-        assert data["actModeOpenAiCompatibleModelId"] == "a.gguf"
-        assert data["planModeOpenAiCompatibleModelId"] == "a.gguf"
 
     def test_sets_active_provider_to_openai_compatible(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
@@ -76,15 +43,12 @@ class TestClineModelRegistrar:
         )
 
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
-        )
+        registrar.register_model(model=self.MODEL)
 
         data = json.loads(state_file.read_text())
-        # The active provider must be updated to openai-compatible
         assert data["apiProvider"] == "openai-compatible"
         assert data["actModeApiProvider"] == "openai-compatible"
-        assert data["openAiModelId"] == "a.gguf"
+        assert data["openAiModelId"] == "llama-coder"
         assert data["openAiBaseUrl"] == "http://localhost:8081/v1"
 
     def test_uses_provider_base_url(self, tmp_path: Path) -> None:
@@ -92,8 +56,8 @@ class TestClineModelRegistrar:
         cline_data = tmp_path / "cline" / "data"
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
+        registrar.register_model(
+            model=self.MODEL,
             provider_base_url="http://localhost:9999",
         )
 
@@ -122,16 +86,14 @@ class TestClineModelRegistrar:
         )
 
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
-        )
+        registrar.register_model(model=self.MODEL)
 
         data = json.loads(providers_file.read_text())
         assert "openrouter" in data["providers"]
         assert data["providers"]["openrouter"]["settings"]["apiKey"] == "sk-test"
         assert "openai-compatible" in data["providers"]
 
-    def test_preserves_external_openai_compatible_provider(self, tmp_path: Path) -> None:
+    def test_overwrites_openai_compatible_base_url(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
         cline_data = tmp_path / "cline" / "data"
         settings_dir = cline_data / "settings"
@@ -153,50 +115,18 @@ class TestClineModelRegistrar:
         )
 
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
-        )
-
-        data = json.loads(providers_file.read_text())
-        assert data["providers"]["openai-compatible"]["settings"]["apiKey"] == "sk-external-key"
-        assert data["providers"]["openai-compatible"]["settings"]["baseUrl"] == "https://api.together.xyz/v1"
-
-    def test_overwrites_default_openai_compatible_provider(self, tmp_path: Path) -> None:
-        logger = make_logger_mock()
-        cline_data = tmp_path / "cline" / "data"
-        settings_dir = cline_data / "settings"
-        settings_dir.mkdir(parents=True, exist_ok=True)
-        providers_file = settings_dir / "providers.json"
-        providers_file.write_text(
-            json.dumps({
-                "version": 1,
-                "providers": {
-                    "openai-compatible": {
-                        "settings": {
-                            "provider": "openai-compatible",
-                            "baseUrl": "https://api.openai.com/v1",
-                            "apiKey": "some-key"
-                        }
-                    }
-                },
-            })
-        )
-
-        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
-        )
+        registrar.register_model(model=self.MODEL)
 
         data = json.loads(providers_file.read_text())
         assert data["providers"]["openai-compatible"]["settings"]["baseUrl"] == "http://localhost:8081/v1"
-        assert data["providers"]["openai-compatible"]["settings"]["apiKey"] == "dummy"
+        assert data["providers"]["openai-compatible"]["settings"]["apiKey"] == "sk-external-key"
 
     def test_returns_false_with_no_models(self, tmp_path: Path) -> None:
         logger = make_logger_mock()
         cline_data = tmp_path / "cline" / "data"
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
-        result = registrar.register_models(models=[])
+        result = registrar.register_model(model=None)  # type: ignore[arg-type]
 
         assert result is False
 
@@ -207,16 +137,14 @@ class TestClineModelRegistrar:
         state_file = cline_data / "globalState.json"
         state_file.write_text(
             json.dumps({
-                "apiProvider": "llama-coder",
-                "openAiModelId": "a.gguf"
+                "apiProvider": "openai-compatible",
+                "openAiModelId": "llama-coder",
             })
         )
 
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
-        # is_registered accepts both provider-prefixed and non-prefixed model names
-        assert registrar.is_registered("a.gguf") is True
-        assert registrar.is_registered("llama-coder/a.gguf") is True
+        assert registrar.is_registered("llama-coder") is True
         assert registrar.is_registered("nonexistent") is False
 
     def test_first_model_port_as_default_base_url(self, tmp_path: Path) -> None:
@@ -224,19 +152,13 @@ class TestClineModelRegistrar:
         cline_data = tmp_path / "cline" / "data"
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder"), ("model-b", "b.gguf", 8082, "llama-qwen3")],
-        )
+        registrar.register_model(model=self.MODEL)
 
         providers_file = cline_data / "settings" / "providers.json"
         data = json.loads(providers_file.read_text())
         assert data["providers"]["openai-compatible"]["settings"]["baseUrl"] == "http://localhost:8081/v1"
-        assert data["providers"]["openai-compatible"]["settings"]["model"] == "a.gguf"
-        assert data["providers"]["openai-native"]["settings"]["baseUrl"] == "http://localhost:8082/v1"
-        assert data["providers"]["openai-native"]["settings"]["model"] == "b.gguf"
-        assert data["providers"]["openai-native"]["settings"]["provider"] == "openai-native"
+        assert data["providers"]["openai-compatible"]["settings"]["model"] == "llama-coder"
         assert "openai-compatible" in data["providers"]
-        assert "openai-native" in data["providers"]
 
     def test_uses_CLINE_DATA_DIR_env_var(self, tmp_path: Path, monkeypatch) -> None:
         logger = make_logger_mock()
@@ -244,9 +166,7 @@ class TestClineModelRegistrar:
         monkeypatch.setenv("CLINE_DATA_DIR", str(cline_data))
 
         registrar = ClineModelRegistrar(logger)
-        registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder")],
-        )
+        registrar.register_model(model=self.MODEL)
 
         providers_file = cline_data / "settings" / "providers.json"
         assert providers_file.exists()
@@ -256,37 +176,103 @@ class TestClineModelRegistrar:
         cline_data = tmp_path / "cline" / "data"
         registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
 
-        result = registrar.register_models(
-            models=[("model-a", "a.gguf", 8081, "llama-coder"), ("model-b", "b.gguf", 8082, "llama-qwen3")],
-        )
+        result = registrar.register_model(model=self.MODEL)
 
         assert result is True
         models_file = cline_data / "settings" / "models.json"
         assert models_file.exists()
         data = json.loads(models_file.read_text())
-        
-        # Check custom container providers are written
-        assert "llama-coder" in data["providers"]
-        assert data["providers"]["llama-coder"]["provider"]["defaultModelId"] == "a.gguf"
-        assert "a.gguf" in data["providers"]["llama-coder"]["models"]
-        
-        assert "llama-qwen3" in data["providers"]
-        assert data["providers"]["llama-qwen3"]["provider"]["defaultModelId"] == "b.gguf"
-        assert "b.gguf" in data["providers"]["llama-qwen3"]["models"]
 
         assert "openai-compatible" in data["providers"]
-        # defaultModelId is non-prefixed (like ollama provider)
-        assert data["providers"]["openai-compatible"]["provider"]["defaultModelId"] == "a.gguf"
-        # models dict keys are non-prefixed
-        assert "a.gguf" in data["providers"]["openai-compatible"]["models"]
-        assert data["providers"]["openai-compatible"]["models"]["a.gguf"]["contextWindow"] == 8192
-        assert "tools" in data["providers"]["openai-compatible"]["models"]["a.gguf"]["capabilities"]
-        # Check modelsSourceUrl is set
-        assert data["providers"]["openai-compatible"]["provider"]["modelsSourceUrl"] == "http://localhost:8081/models"
-        assert data["providers"]["openai-compatible"]["provider"]["protocol"] == "openai-chat"
-        assert data["providers"]["openai-compatible"]["provider"]["client"] == "openai-compatible"
-        assert "openai-native" in data["providers"]
-        assert data["providers"]["openai-native"]["provider"]["defaultModelId"] == "b.gguf"
-        assert "b.gguf" in data["providers"]["openai-native"]["models"]
-        assert data["providers"]["openai-native"]["models"]["b.gguf"]["contextWindow"] == 8192
-        assert data["providers"]["openai-native"]["provider"]["modelsSourceUrl"] == "http://localhost:8082/models"
+        prov = data["providers"]["openai-compatible"]
+        assert prov["provider"]["defaultModelId"] == "llama-coder"
+        models = prov["models"]
+        assert isinstance(models, list)
+        assert models[0]["id"] == "llama-coder"
+        assert models[0]["name"] == "model-a"
+
+    def test_registers_context_window_from_filename(self, tmp_path: Path) -> None:
+        """Context window is derived from filename via ResourceRequirementsMapper."""
+        logger = make_logger_mock()
+        cline_data = tmp_path / "cline" / "data"
+        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
+
+        result = registrar.register_model(
+            model=("qwen2.5-coder:7b", "qwen2.5-coder-7b-instruct-q4_k_m.gguf", 8081, "llama-coder"),
+        )
+
+        assert result is True
+        models_file = cline_data / "settings" / "models.json"
+        data = json.loads(models_file.read_text())
+        models = data["providers"]["openai-compatible"]["models"]
+        model = next(m for m in models if m["id"] == "llama-coder")
+        assert model["contextWindow"] == 8192
+        assert model["maxInputTokens"] == 8192
+
+    def test_uses_api_key_from_env_var(self, tmp_path: Path, monkeypatch) -> None:
+        logger = make_logger_mock()
+        cline_data = tmp_path / "cline" / "data"
+        monkeypatch.setenv("OPENAI_API_KEY", "from-env")
+
+        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
+        registrar.register_model(model=self.MODEL)
+
+        secrets_file = cline_data / "secrets.json"
+        data = json.loads(secrets_file.read_text())
+        assert data["openAiApiKey"] == "from-env"
+
+    def test_api_key_param_overrides_env(self, tmp_path: Path, monkeypatch) -> None:
+        logger = make_logger_mock()
+        cline_data = tmp_path / "cline" / "data"
+        monkeypatch.setenv("OPENAI_API_KEY", "from-env")
+
+        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data, api_key="explicit")
+        registrar.register_model(model=self.MODEL)
+
+        secrets_file = cline_data / "secrets.json"
+        data = json.loads(secrets_file.read_text())
+        assert data["openAiApiKey"] == "explicit"
+
+    def test_uses_dummy_when_no_api_key_set(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        logger = make_logger_mock()
+        cline_data = tmp_path / "cline" / "data"
+
+        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data)
+        registrar.register_model(model=self.MODEL)
+
+        secrets_file = cline_data / "secrets.json"
+        data = json.loads(secrets_file.read_text())
+        assert data["openAiApiKey"] == "dummy"
+
+    def test_writes_secrets_file(self, tmp_path: Path) -> None:
+        logger = make_logger_mock()
+        cline_data = tmp_path / "cline" / "data"
+        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data, api_key="test-key")
+
+        registrar.register_model(model=self.MODEL)
+
+        secrets_file = cline_data / "secrets.json"
+        assert secrets_file.exists()
+        data = json.loads(secrets_file.read_text())
+        assert data["openAiApiKey"] == "test-key"
+
+    def test_writes_global_state_keys(self, tmp_path: Path) -> None:
+        logger = make_logger_mock()
+        cline_data = tmp_path / "cline" / "data"
+        registrar = ClineModelRegistrar(logger, cline_data_dir=cline_data, api_key="test-key")
+
+        registrar.register_model(model=self.MODEL)
+
+        state_file = cline_data / "globalState.json"
+        data = json.loads(state_file.read_text())
+
+        assert data["apiProvider"] == "openai-compatible"
+        assert data["openAiModelId"] == "llama-coder"
+        assert data["openAiBaseUrl"] == "http://localhost:8081/v1"
+        assert data["openAiApiKey"] == "test-key"
+
+        assert data["openai-compatible-model-id"] == "llama-coder"
+        assert data["openAiCompatibleModelId"] == "llama-coder"
+        assert data["llama-coder-model-id"] == "llama-coder"
+        assert data["llamaCoderModelId"] == "llama-coder"
