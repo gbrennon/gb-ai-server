@@ -61,6 +61,51 @@ class TestModelEntryFromTuple:
         assert entry.ctx_size == 4096
 
 
+
+class TestModelEntryDynamicCtxSize:
+    """Tests for CTX_SIZE environment variable override."""
+
+    def test_default_is_8192_when_no_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("CTX_SIZE", raising=False)
+        entry = ModelEntry("a", "b.gguf", "https://example.com/b.gguf")
+        assert entry.ctx_size == 8192
+
+    def test_default_from_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CTX_SIZE", "32768")
+        entry = ModelEntry("a", "b.gguf", "https://example.com/b.gguf")
+        assert entry.ctx_size == 32768
+
+    def test_from_string_respects_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CTX_SIZE", "16384")
+        entry = ModelEntry.from_string("qwen:7b|qwen.gguf|https://example.com/q")
+        assert entry.ctx_size == 16384
+
+    def test_five_part_string_overrides_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CTX_SIZE", "32768")
+        entry = ModelEntry.from_string("qwen:7b|qwen.gguf|https://example.com/q|999|4096")
+        assert entry.ctx_size == 4096
+
+    def test_invalid_env_var_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CTX_SIZE", "not-a-number")
+        entry = ModelEntry("a", "b.gguf", "https://example.com/b.gguf")
+        assert entry.ctx_size == 8192
+
+    def test_empty_env_var_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CTX_SIZE", "")
+        entry = ModelEntry("a", "b.gguf", "https://example.com/b.gguf")
+        assert entry.ctx_size == 8192
+
+    def test_from_tuple_respects_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CTX_SIZE", "24576")
+        entry = ModelEntry.from_tuple(("m", "f.gguf", "https://example.com/f"))
+        assert entry.ctx_size == 24576
+
+    def test_five_tuple_overrides_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CTX_SIZE", "32768")
+        entry = ModelEntry.from_tuple(("m", "f.gguf", "https://example.com/f", 50, 4096))
+        assert entry.ctx_size == 4096
+
+
 class TestModelEntryStr:
     def test_serialization(self) -> None:
         entry = ModelEntry("a", "b.gguf", "https://example.com/b.gguf")
