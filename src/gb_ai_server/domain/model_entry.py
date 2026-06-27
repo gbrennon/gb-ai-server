@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -13,13 +14,27 @@ class ModelEntry:
     Supports two formats:
       3-part: "display_name|filename|download_url"
       5-part: "display_name|filename|download_url|n_gpu_layers|ctx_size"
+
+    ctx_size defaults to the CTX_SIZE environment variable if set,
+    otherwise 8192. The 5-part string/tuple format always overrides.
     """
 
     display_name: str
     filename: str
     url: str
     n_gpu_layers: int = 999
-    ctx_size: int = 8192
+    ctx_size: int = field(default_factory=lambda: ModelEntry._resolve_default_ctx_size())  # type: ignore[arg-type]
+
+    @staticmethod
+    def _resolve_default_ctx_size() -> int:
+        """Resolve the default context size from CTX_SIZE env var, or 8192."""
+        raw = os.environ.get("CTX_SIZE")
+        if raw is not None:
+            try:
+                return int(raw.strip())
+            except (ValueError, TypeError):
+                pass
+        return 8192
 
     @classmethod
     def from_string(cls, entry: str) -> ModelEntry:
@@ -50,7 +65,7 @@ class ModelEntry:
             raise ValueError("Model entry contains empty fields")
 
         n_gpu_layers = 999
-        ctx_size = 8192
+        ctx_size = cls._resolve_default_ctx_size()
         if len(parts) == 5:
             n_gpu_layers = int(parts[3].strip())
             ctx_size = int(parts[4].strip())
