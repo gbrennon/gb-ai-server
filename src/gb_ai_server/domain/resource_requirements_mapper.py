@@ -55,3 +55,11 @@ class ResourceRequirementsMapper:
             context_size=4096,
             gpu_layers=999,
         )
+
+    @staticmethod
+    def context_size_for_model(filename: str) -> int:
+        """Resolve the context window size for a model based on its filename.
+
+        Delegates to requirements_for_model() and returns only the context_size.
+        """
+        return ResourceRequirementsMapper.requirements_for_model(filename).context_size
