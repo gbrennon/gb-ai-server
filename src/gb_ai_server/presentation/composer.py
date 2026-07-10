@@ -19,6 +19,7 @@ from gb_ai_server.infrastructure import (
     HuggingFaceModelDownloader,
     ClineModelRegistrar,
 )
+from gb_ai_server.infrastructure.paths import ModelPathResolver
 from gb_ai_server.application.dtos.responses import VerifyPrerequisitesResponse
 from gb_ai_server.application.dtos.requests import (
     CopyModelsRequest,
@@ -96,13 +97,14 @@ class BootstrapCompositionRoot:
             self._set_model_env(model)
 
             prereqs = self._verify_prerequisites(env)
+            resolver = ModelPathResolver(args.models_dirs)
 
             running_model = self._detect_running_model(prereqs.inspector, model)
             if running_model is not None:
                 if running_model == model.filename:
                     _, _, port = self._get_service_info(model)
                     self._model_selection_presenter.model_already_running(model.display_name)
-                    self._register_models(args, model)
+                    self._register_models(resolver, model)
                     self._service_presenter.report_success(port=port)
                     return 0
                 self._model_selection_presenter.switching_model(
@@ -111,12 +113,15 @@ class BootstrapCompositionRoot:
                 )
                 self._stop_running_service(prereqs.compose_lifecycle, env)
 
-            self._download_models(args, model)
+            model_path = self._ensure_model_available(resolver, model, args)
+            if model_path is None:
+                return 1
+
             self._start_services(prereqs.compose_lifecycle, env, model)
-            self._copy_models(prereqs.inspector, prereqs.operator, model, args)
+            self._copy_models(prereqs.inspector, prereqs.operator, model, model_path, args)
             self._restart_services(prereqs.compose_lifecycle, env, model)
             self._verify_health(args, model)
-            self._register_models(args, model)
+            self._register_models(resolver, model)
             _, _, port = self._get_service_info(model)
             self._service_presenter.report_success(port=port)
             return 0
@@ -206,10 +211,23 @@ class BootstrapCompositionRoot:
             raise SystemExit(1)
         return result
 
-    def _download_models(self, args: Namespace, model: ModelEntry) -> None:
+    def _ensure_model_available(
+        self, resolver: ModelPathResolver, model: ModelEntry, args: Namespace
+    ) -> Path | None:
+        """Find model in any configured dir, or download to primary dir."""
+        existing = resolver.resolve(model.filename)
+        if existing is not None:
+            self._infra.logger.info(
+                f"{model.display_name} found at {existing}"
+            )
+            return existing
+
         if args.skip_download:
             self._prerequisite_presenter.skipping_download()
-            return
+            self._model_selection_presenter.model_not_available(
+                model.display_name, model.filename
+            )
+            return None
 
         hf_token = args.hf_token or os.getenv("HF_TOKEN")
         downloader = HuggingFaceModelDownloader(self._infra.logger, token=hf_token)
@@ -217,14 +235,23 @@ class BootstrapCompositionRoot:
         response = service.execute(
             DownloadModelsRequest(
                 entries=[(model.display_name, model.filename, model.url)],
-                destination_dir=str(args.models_dir),
+                destination_dir=str(resolver.primary()),
                 skip_existing=True,
                 token=hf_token,
             )
         )
         if not any(response.results.values()):
             self._download_presenter.all_downloads_failed()
-            raise SystemExit(1)
+            return None
+
+        resolved = resolver.resolve(model.filename)
+        if resolved is None:
+            self._infra.logger.error(
+                f"Download completed but file not found at {resolver.primary() / model.filename}"
+            )
+            return None
+
+        return resolved
 
     def _start_services(self, compose_lifecycle: ComposeLifecycle | None, env, model: ModelEntry) -> None:
         service_name, _, _ = self._get_service_info(model)
@@ -243,6 +270,7 @@ class BootstrapCompositionRoot:
         inspector: ContainerInspector | None,
         operator: ContainerOperator | None,
         model: ModelEntry,
+        resolved_path: Path,
         args: Namespace,
     ) -> None:
         _, container_name, _ = self._get_service_info(model)
@@ -250,7 +278,7 @@ class BootstrapCompositionRoot:
         response = service.execute(
             CopyModelsRequest(
                 entries=[(model.display_name, model.filename, model.url)],
-                source_dir=str(args.models_dir),
+                source_dir=str(resolved_path.parent),
                 container_name=container_name,
                 dest_dir="/models",
             )
@@ -286,9 +314,9 @@ class BootstrapCompositionRoot:
             self._service_presenter.health_check_failed()
             raise SystemExit(1)
 
-    def _register_models(self, args: Namespace, model: ModelEntry) -> None:
-        model_path = Path(args.models_dir) / model.filename
-        if not model_path.exists():
+    def _register_models(self, resolver: ModelPathResolver, model: ModelEntry) -> None:
+        model_path = resolver.resolve(model.filename)
+        if model_path is None:
             self._model_selection_presenter.model_not_available(model.display_name, model.filename)
             return
 

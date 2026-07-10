@@ -7,6 +7,7 @@ from pathlib import Path
 
 from gb_ai_server.domain import PortAllocator
 from gb_ai_server.infrastructure import ClineModelRegistrar, Environment
+from gb_ai_server.infrastructure.paths import ModelPathResolver
 from gb_ai_server.infrastructure.di.container import (
     InfrastructureRegistry,
     VerifierFactory,
@@ -43,9 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--models-dir",
-        type=Path,
-        default=Path(os.getenv("MODELS_DIR", "/tmp/llama_models")),
-        help="Directory for model files",
+        type=str,
+        default=None,
+        help="Colon-separated list of model directories (first is writable). "
+             "Overrides MODEL_DIRS and MODELS_DIR env vars.",
     )
     parser.add_argument(
         "--hf-token",
@@ -78,10 +80,31 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _normalize_models_dirs(args: argparse.Namespace) -> None:
+    """Normalize *args* to contain *models_dirs* (list) and *models_dir* (first).
+
+    Supports:
+      - ``--models-dir ./models`` (single dir, backward compat)
+      - ``--models-dir ./models:/mnt/usb`` (colon-separated)
+      - ``MODEL_DIRS`` env var (colon-separated, fallback)
+      - ``MODELS_DIR`` env var (single dir, fallback)
+    """
+    raw: str | None = args.models_dir
+    raw = raw or os.getenv("MODEL_DIRS") or os.getenv("MODELS_DIR")
+    if not raw:
+        raw = "/tmp/llama_models"
+    parts = [Path(d.strip()) for d in raw.split(":") if d.strip()]
+    if not parts:
+        parts = [Path("/tmp/llama_models")]
+    args.models_dirs = parts
+    args.models_dir = parts[0]
+
+
 def main(argv: list[str] | None = None) -> int:
     Environment.load_env_file(Path(".env"))
     parser = build_parser()
     args = parser.parse_args(argv)
+    _normalize_models_dirs(args)
 
     if args.list_models:
         return _list_models(args)
@@ -128,6 +151,7 @@ def _register_only(args: argparse.Namespace) -> int:
     logger = infra.logger
     model_sel = ModelSelectionPresenter(logger)
     env_root = Path(".").resolve()
+    resolver = ModelPathResolver(args.models_dirs)
 
     models_config = env_root / "scripts" / "models.conf.sh"
     if not models_config.exists():
@@ -150,8 +174,8 @@ def _register_only(args: argparse.Namespace) -> int:
 
     available = []
     for m in models:
-        model_path = args.models_dir / m.filename
-        if model_path.exists():
+        model_path = resolver.resolve(m.filename)
+        if model_path is not None:
             available.append(m)
         else:
             model_sel.model_not_available(m.display_name, m.filename)
