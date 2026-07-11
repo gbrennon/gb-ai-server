@@ -19,7 +19,7 @@ class TestBuildParser:
             assert args.dry_run is False
             assert args.skip_download is False
             assert args.skip_health is False
-            assert args.models_dir is None  # raw; normalization happens in main()
+            assert args.models_dir is None
             assert args.hf_token is None
             assert args.debug is False
 
@@ -30,10 +30,8 @@ class TestBuildParser:
                 "--dry-run",
                 "--skip-download",
                 "--skip-health",
-                "--models-dir",
-                "/custom/path",
-                "--hf-token",
-                "hf_abc123",
+                "--models-dir", "/custom/path",
+                "--hf-token", "hf_abc123",
                 "--debug",
             ]
         )
@@ -45,6 +43,16 @@ class TestBuildParser:
         assert args.models_dirs == [Path("/custom/path")]
         assert args.hf_token == "hf_abc123"
         assert args.debug is True
+
+    def test_parses_register_custom(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["--register-custom", "unsloth/Qwen3-14B-GGUF"])
+        assert args.register_custom == "unsloth/Qwen3-14B-GGUF"
+
+    def test_parses_register_flag(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["--register"])
+        assert args.register is True
 
 
 class TestNormalizeModelsDirs:
@@ -89,159 +97,37 @@ class TestNormalizeModelsDirs:
 
 class TestMain:
     def test_delegates_to_composition_root(self) -> None:
-        with patch(
-            "gb_ai_server.presentation.cli.BootstrapCompositionRoot"
-        ) as MockRoot:
+        with patch("gb_ai_server.presentation.cli.BootstrapCompositionRoot") as MockRoot:
             instance = MockRoot.return_value
             instance.run.return_value = 0
-
             result = main(["--skip-download", "--skip-health"])
-
             assert result == 0
             MockRoot.assert_called_once()
             instance.run.assert_called_once()
 
     def test_returns_non_zero_when_root_fails(self) -> None:
-        with patch(
-            "gb_ai_server.presentation.cli.BootstrapCompositionRoot"
-        ) as MockRoot:
+        with patch("gb_ai_server.presentation.cli.BootstrapCompositionRoot") as MockRoot:
             instance = MockRoot.return_value
             instance.run.return_value = 1
-
             result = main(["--skip-download", "--skip-health"])
-
             assert result == 1
 
-    def _register_models_test(
-        self, tmp_path: Path, args: list[str], register_return: bool
-    ) -> int:
-        scripts_dir = tmp_path / "scripts"
-        scripts_dir.mkdir()
-        conf_file = scripts_dir / "models.conf.sh"
-        conf_file.write_text('MODELS=("test-model:latest|test.gguf|https://example.com")\n')
-        models_dir = tmp_path / "models"
-        models_dir.mkdir()
-        (models_dir / "test.gguf").touch()
-
-        full_args = [
-            "--register-models",
-            "--models-dir", str(models_dir),
-            *args,
-        ]
+    def test_register_missing_config(self, tmp_path: Path) -> None:
         with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
-            with patch("gb_ai_server.presentation.cli.ModelPathResolver") as MockResolver:
-                instance = MockResolver.return_value
-                instance.resolve.return_value = models_dir / "test.gguf"
-                with patch("gb_ai_server.presentation.cli.ClineModelRegistrar") as MockRegistrar:
-                    cline_instance = MockRegistrar.return_value
-                    cline_instance.register_model.return_value = register_return
-                    result = main(full_args)
-                    if register_return:
-                        MockRegistrar.assert_called_once()
-                        cline_instance.register_model.assert_called_once()
-                        call_args = cline_instance.register_model.call_args
-                        _, kwargs = call_args
-                        model_arg = kwargs.get("model")
-                        assert model_arg is not None
-                        assert len(model_arg) == 4
-                        assert model_arg[3] == "llama-coder"
-                    return result
-
-    def test_register_models_successful(self, tmp_path: Path) -> None:
-        result = self._register_models_test(tmp_path, [], True)
-        assert result == 0
-
-    def test_register_models_failure(self, tmp_path: Path) -> None:
-        result = self._register_models_test(tmp_path, [], False)
-        assert result == 1
-
-    def test_register_models_missing_config(self, tmp_path: Path) -> None:
-        with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
-            result = main(["--register-models"])
+            result = main(["--register"])
             assert result == 1
 
-    def test_register_models_no_file_skips_registration(self, tmp_path: Path) -> None:
-        scripts_dir = tmp_path / "scripts"
-        scripts_dir.mkdir()
-        conf_file = scripts_dir / "models.conf.sh"
-        conf_file.write_text('MODELS=("test-model:latest|test.gguf|https://example.com")\n')
-        models_dir = tmp_path / "models"
-        models_dir.mkdir()
-
+    def test_register_from_config(self, tmp_path: Path) -> None:
+        (tmp_path / ".models.yaml").write_text("model:\n  id: test\n  file: t.gguf\n")
         with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
-            with patch("gb_ai_server.presentation.cli.ModelPathResolver") as MockResolver:
-                instance = MockResolver.return_value
-                instance.resolve.return_value = None  # no file found
-                with patch("gb_ai_server.presentation.cli.ClineModelRegistrar") as MockRegistrar:
-                    cline_instance = MockRegistrar.return_value
-                    cline_instance.register_model.return_value = True
-                    result = main([
-                        "--register-models",
-                        "--models-dir", str(models_dir),
-                    ])
-                    assert result == 0
-                    cline_instance.register_model.assert_not_called()
+            with patch("gb_ai_server.application.services.register_custom_model_service.register_custom_model") as mock_reg:
+                mock_reg.return_value = {"cline": True}
+                result = main(["--register"])
+                assert result == 0
 
-    def test_list_models(self, tmp_path: Path) -> None:
-        scripts_dir = tmp_path / "scripts"
-        scripts_dir.mkdir()
-        conf_file = scripts_dir / "models.conf.sh"
-        conf_file.write_text(
-            'MODELS=(\n'
-            '  "model-a|a.gguf|https://example.com/a"\n'
-            '  "model-b|b.gguf|https://example.com/b"\n'
-            ')\n'
-        )
-        with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
-            result = main(["--list-models"])
+    def test_register_custom(self) -> None:
+        with patch("gb_ai_server.application.services.register_custom_model_service.register_custom_model") as mock_reg:
+            mock_reg.return_value = {"cline": True, "opencode": True}
+            result = main(["--register-custom", "test/repo"])
             assert result == 0
-
-    def test_list_models_missing_config(self, tmp_path: Path) -> None:
-        with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
-            result = main(["--list-models"])
-            assert result == 1
-
-    def test_register_models_with_model_flag(self, tmp_path: Path) -> None:
-        scripts_dir = tmp_path / "scripts"
-        scripts_dir.mkdir()
-        conf_file = scripts_dir / "models.conf.sh"
-        conf_file.write_text(
-            'MODELS=(\n'
-            '  "model-a|a.gguf|https://example.com/a"\n'
-            '  "model-b|b.gguf|https://example.com/b"\n'
-            ')\n'
-        )
-        models_dir = tmp_path / "models"
-        models_dir.mkdir()
-        (models_dir / "b.gguf").touch()
-
-        with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
-            with patch("gb_ai_server.presentation.cli.ModelPathResolver") as MockResolver:
-                resolve_mock = MockResolver.return_value
-                resolve_mock.resolve.return_value = models_dir / "b.gguf"
-                with patch("gb_ai_server.presentation.cli.ClineModelRegistrar") as MockRegistrar:
-                    instance = MockRegistrar.return_value
-                    instance.register_model.return_value = True
-
-                    result = main([
-                        "--register-models",
-                        "--models-dir", str(models_dir),
-                        "--model", "model-b",
-                    ])
-
-                    assert result == 0
-                    call_args = instance.register_model.call_args
-                    _, kwargs = call_args
-                    model_arg = kwargs.get("model")
-                    assert model_arg is not None
-                    assert model_arg[0] == "model-b"
-
-    def test_register_models_with_bad_model_flag(self, tmp_path: Path) -> None:
-        scripts_dir = tmp_path / "scripts"
-        scripts_dir.mkdir()
-        conf_file = scripts_dir / "models.conf.sh"
-        conf_file.write_text('MODELS=("model-a|a.gguf|https://example.com/a")\n')
-        with patch("gb_ai_server.presentation.cli.Path.resolve", return_value=tmp_path):
-            result = main(["--register-models", "--model", "nonexistent"])
-            assert result == 1
-
+            mock_reg.assert_called_once_with("test/repo", 0)
