@@ -263,12 +263,31 @@ Model ID (agent key): unsloth-qwen3-14b-gguf
 - **401 Unauthorized** — the agent requires a non-empty API key. Set
   `OPENAI_API_KEY` in `.env` before registering (any non-empty string works
   for llama.cpp).
-- **Context window mismatch** — the agent's configured `contextWindow` exceeds
-  what the server started with. Re-register after the server is running so Pi
-  can probe the actual `n_ctx`:
+
+- **"request exceeds the available context size"** — your agent is sending
+  more tokens than the server's context window. Solutions:
+
+  **GPU mode:** Reduce GPU layers to free VRAM for KV cache. Edit
+  `.models.yaml`:
+
+  ```yaml
+  model:
+    id: unsloth/Qwen3-14B-GGUF
+    gpu_layers: 20
+  ```
+
+  Then restart:
   ```bash
+  CTX_SIZE=16384 make down && CTX_SIZE=16384 make up
   make bootstrap-register
   ```
+
+  **CPU mode:** Increase `CTX_SIZE` directly in `.env`:
+  ```bash
+  echo "CTX_SIZE=32768" >> .env
+  make bootstrap-cpu-container
+  ```
+
 - **Model not found (404)** — llama.cpp serves exactly one model at a time.
   The model ID returned by `/v1/models` must match what the agent sends.
   Re-run registration to sync the ID.
