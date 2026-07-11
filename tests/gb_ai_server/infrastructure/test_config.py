@@ -35,7 +35,7 @@ class TestEnvironmentPaths:
 
     def test_models_config_path(self) -> None:
         paths = EnvironmentPaths(Path("/tmp/test-repo"))
-        assert str(paths.models_config_path) == "/tmp/test-repo/scripts/models.conf.sh"
+        assert str(paths.models_config_path).endswith(".models.yaml")
 
     def test_scripts_lib_dir(self) -> None:
         paths = EnvironmentPaths(Path("/tmp/test-repo"))

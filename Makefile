@@ -1,155 +1,136 @@
-.PHONY: help up down logs status ps models check-cdi clean restart bootstrap bootstrap-dry bootstrap-quick bootstrap-coder bootstrap-qwen3 bootstrap-devs coder devstral register-models register-models-quick clean-all list-models
+.PHONY: help up down logs status ps models check-cdi clean restart bootstrap bootstrap-dry bootstrap-quick bootstrap-register clean-all register
 
 COMPOSE_FILE := docker-compose.yml
 ENV_FILE := .env
 COMPOSE := podman-compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
 
-help:
-	@echo "AI Code Models Stack - Podman Compose"
-	@echo ""
-	@echo "Usage: make [target]"
-	@echo ""
-	@echo "Core targets:"
-	@echo "  up              Start llama-coder service"
-	@echo "  down            Stop all services"
-	@echo "  restart         Restart all running services"
-	@echo ""
-	@echo "Monitoring:"
-	@echo "  status          Show service status"
-	@echo "  ps              List running containers"
-	@echo "  logs            Follow logs (all services)"
-	@echo "  logs-coder      Follow llama-coder logs"
-	@echo ""
-	@echo "GPU & Environment:"
-	@echo "  check-cdi       Verify CDI setup and list available GPUs"
-	@echo "  models          List downloaded models in llama_models volume"
-	@echo ""
-	@echo "Bootstrap (uv run gb-ai-server):"
-	@echo "  bootstrap       Default model (qwen2.5-coder)"
-	@echo "  bootstrap-coder Qwen2.5 Coder 7B"
-	@echo "  bootstrap-qwen3 Qwen3 14B"
-	@echo "  bootstrap-devs  Devstral Small 2 24B"
-	@echo "  bootstrap-dry   Dry-run mode (preview only)"
-	@echo "  bootstrap-quick Skip download & health check (faster)"
-	@echo ""
-	@echo "Reasoning (slow, high quality):"
-	@echo "  devstral        Devstral Small 2 24B (22 GPU layers, 16K ctx)"
-	@echo "  coder           qwen2.5-coder 7B (full GPU, fast)"
-	@echo ""
-	@echo "Maintenance:"
-	@echo "  clean           Remove all containers (keeps volumes)"
-	@echo "  clean-all       Remove containers AND volumes (WARNING: data loss)"
-	@echo "  list-models     Show available models"
-	@echo ""
+help: ## Show this help
+	@grep -E '^[a-zA-Z_][a-zA-Z0-9_-]+:.*?## .*$$|^##@' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## |##@"}; \
+		/^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) ; next } \
+		{ printf "  \033[36m%-26s\033[0m %s\n", $$1, $$2 }'
 
-# Start service
-up:
+##@ Core
+
+up: ## Start llama service
 	$(COMPOSE) up -d
 	@echo "✓ Service started"
-	$(MAKE) register-models-quick
 
-down:
+down: ## Stop all services
 	$(COMPOSE) down
 	@echo "✓ Stack stopped"
 
-restart:
+restart: ## Restart all running services
 	$(COMPOSE) restart
 	@echo "Services restarted"
 
-status:
+##@ Register Custom Model
+
+register: ## Register HF model (HF_MODEL=org/repo [CTX_SIZE=N])
+	@[ -n "$(HF_MODEL)" ] || { echo "ERROR: HF_MODEL is required" >&2; exit 1; }
+	uv run gb-ai-server --register-custom $(HF_MODEL) --ctx-size $${CTX_SIZE:-0}
+
+##@ Monitoring
+
+status: ## Show service status
 	@echo "=== Service Status ==="
 	$(COMPOSE) ps
 
-ps:
+ps: ## List running containers
 	@podman ps --filter "label=com.docker.compose.project" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-logs:
+logs: ## Follow logs (all services)
 	$(COMPOSE) logs -f
 
-logs-coder:
+logs-coder: ## Follow llama logs
 	$(COMPOSE) logs -f llama
 
-# GPU verification
-check-cdi:
+##@ GPU & Environment
+
+check-cdi: ## Verify CDI setup and list GPUs
 	@echo "=== CDI Status ==="
-	@nvidia-ctk cdi list || echo "Error: nvidia-ctk not found. Install NVIDIA Container Toolkit."
+	@nvidia-ctk cdi list || echo "Error: nvidia-ctk not found"
 	@echo ""
 	@echo "=== Systemd Service Status ==="
-	@systemctl is-active nvidia-cdi-refresh.service && echo "nvidia-cdi-refresh.service is active" || echo "nvidia-cdi-refresh.service is NOT active"
+	@systemctl is-active nvidia-cdi-refresh.service && echo "active" || echo "inactive"
 	@echo ""
 	@echo "=== Test GPU Access ==="
-	@podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable ubuntu nvidia-smi -L 2>/dev/null && echo "GPU accessible via CDI" || echo "GPU not accessible"
+	@podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable ubuntu nvidia-smi -L 2>/dev/null && echo "GPU accessible" || echo "GPU not accessible"
 
-# Models management
-models:
+models: ## List models in llama_models volume
 	@echo "=== Downloaded Models ==="
-	@podman run --rm -v llama_models:/models alpine ls -lh /models || echo "No models found yet"
+	@podman run --rm -v llama_models:/models alpine ls -lh /models || echo "No models found"
 
-clean:
-	$(COMPOSE) down
-	@echo "Containers removed (volumes retained)"
+##@ Bootstrap
 
-# Register models with Cline
-register-models:
-	uv run gb-ai-server --register-models --skip-download --skip-health
-
-register-models-quick:
-	uv run gb-ai-server --register-models --skip-download --skip-health 2>/dev/null || true
-
-# List available models
-list-models:
-	uv run gb-ai-server --list-models
-
-# Reasoning mode — launch devstral-24B with optimized GPU layer count
-DEVSTRAL_MODEL := mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf
-DEVSTRAL_N_GPU := 22
-DEVSTRAL_CTX := 16384
-
-devstral:
-	$(COMPOSE) down 2>/dev/null; \
-	N_GPU_LAYERS=$(DEVSTRAL_N_GPU) CTX_SIZE=$(DEVSTRAL_CTX) LLAMA_MODEL=$(DEVSTRAL_MODEL) $(COMPOSE) up -d; \
-	echo "✓ Devstral started (22 GPU / 16K ctx)"; \
-	$(MAKE) register-models-quick
-
-# Fast coding mode — qwen2.5-coder 7B with full GPU offload
-CODER_MODEL := qwen2.5-coder-7b-instruct-q4_k_m.gguf
-CODER_N_GPU := 999
-CODER_CTX := 32768
-
-coder:
-	$(COMPOSE) down 2>/dev/null; \
-	N_GPU_LAYERS=$(CODER_N_GPU) CTX_SIZE=$(CODER_CTX) LLAMA_MODEL=$(CODER_MODEL) $(COMPOSE) up -d; \
-	echo "✓ Coder started (7B, full GPU)"; \
-	$(MAKE) register-models-quick
-
-# Bootstrap — orchestrate the full llama.cpp bootstrap via uv
-bootstrap:
+bootstrap: ## Start server
 	uv run gb-ai-server
 
-bootstrap-coder:
-	uv run gb-ai-server --model qwen2.5-coder:7b
-
-bootstrap-qwen3:
-	uv run gb-ai-server --model qwen3:14b
-
-bootstrap-devs:
-	uv run gb-ai-server --model devstral-small-2
-
-bootstrap-dry:
+bootstrap-dry: ## Dry-run (preview only)
 	uv run gb-ai-server --dry-run
 
-bootstrap-quick:
+bootstrap-quick: ## Skip download & health check
 	uv run gb-ai-server --skip-download --skip-health
 
-bootstrap-register:
-	uv run gb-ai-server --register-models
+bootstrap-register: ## Register model from .models.yaml with all agents
+	uv run gb-ai-server --register
 
-clean-all:
-	@read -p "WARNING: This will delete all containers AND volumes. Continue? [y/N] " -n 1 -r; \
+##@ CPU-Only
+
+bootstrap-cpu-container: ## Bootstrap CPU-only container + register model
+	@echo "=== CPU-Only Bootstrap ==="
+	@[ -f ".env" ] || cp .env.example .env
+	@echo "Stopping any running containers..."
+	@$(COMPOSE) down 2>/dev/null || true
+	@podman stop llama-coder-cpu 2>/dev/null || true
+	@podman rm llama-coder-cpu 2>/dev/null || true
+	@echo "Starting CPU container..."
+	podman-compose --env-file .env -f docker-compose.cpu.yml up -d
+	@echo "Waiting for model to load on CPU (up to 160s for large models)..."
+	@sleep 10
+	@success=0; for i in $$(seq 1 30); do \
+		if curl -sf http://localhost:8081/health >/dev/null 2>&1; then \
+			echo "✓ CPU server healthy (after ~$$((10 + i * 5))s)"; \
+			success=1; break; \
+		fi; \
+		sleep 5; \
+	done; \
+	if [ $$success -eq 0 ]; then \
+		echo "ERROR: CPU server did not become healthy"; \
+		podman logs llama-coder-cpu 2>&1 | tail -20; \
+		exit 1; \
+	fi
+	@echo "Registering model with agents..."
+	uv run gb-ai-server --register
+	@echo ""
+	@echo "=== CPU Bootstrap Complete ==="
+	@echo "API: http://localhost:8081/v1"
+	@echo "Logs: podman logs llama-coder-cpu"
+cpu-up: ## Start CPU-only container (no bootstrap)
+	@echo "Stopping GPU container (if running)..."
+	@$(COMPOSE) down 2>/dev/null || true
+	podman-compose --env-file .env -f docker-compose.cpu.yml up -d
+
+cpu-down: ## Stop CPU container
+	podman-compose --env-file .env -f docker-compose.cpu.yml down
+	@echo "CPU container stopped"
+
+cpu-logs: ## CPU container logs
+	podman logs -f llama-coder-cpu
+
+##@ Maintenance
+
+clean: ## Remove containers (keeps volumes)
+	$(COMPOSE) down
+	podman-compose --env-file .env -f docker-compose.cpu.yml down 2>/dev/null || true
+	@echo "Containers removed (volumes retained)"
+
+clean-all: ## Remove containers AND volumes
+	@read -p "WARNING: Delete all data? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 		$(COMPOSE) down -v; \
-		echo "All containers and volumes removed"; \
+		echo "All removed"; \
 	else \
 		echo "Cancelled."; \
 	fi

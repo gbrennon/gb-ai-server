@@ -5,8 +5,8 @@ services:
 
     restart_policy:
       condition: on-failure
-      max_retries: 3
-      delay: 10s
+      max_retries: 10
+      delay: 5s
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -37,6 +37,8 @@ services:
       - "${N_GPU_LAYERS}"
       - --ctx-size
       - "${CTX_SIZE}"
+      - --parallel
+      - "1"
 
     ports:
       - "127.0.0.1:${LLAMA_PORT:-8081}:8080"
@@ -79,10 +81,7 @@ services:
 
 volumes:
   llama_models:
-    driver: local
-    labels:
-      backup: "daily"
-      description: "LLaMA.cpp model storage"
+    external: true
 
 networks:
   ai-net:
