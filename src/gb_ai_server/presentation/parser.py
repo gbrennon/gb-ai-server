@@ -1,56 +1,75 @@
-"""Model configuration file parser (bash-format models.conf.sh)."""
+"""Model configuration file parser (YAML .models.yaml)."""
+
+from __future__ import annotations
 
 from pathlib import Path
 
 from gb_ai_server.domain import ModelEntry
 
 
-def _strip_array_declaration(line: str) -> str:
-    if line.startswith("MODELS=("):
-        return line[8:]
-    return line
+def load_models(config_path: Path) -> list[ModelEntry]:
+    """Parse .models.yaml into ModelEntry instances.
 
+    Format:
+        model:
+          id: unsloth/Qwen3-14B-GGUF     # required
+          file: Qwen3-14B-Q4_K_M.gguf    # optional (auto-detected)
+          gpu_layers: 999                # optional (default 999)
+          ctx_size: 0                    # optional (0 = auto-detect)
+    """
+    import yaml
 
-def _is_array_end(line: str) -> bool:
-    return line.endswith(")")
+    if not config_path.exists():
+        raise ValueError(f"Model config not found: {config_path}")
 
+    with open(config_path) as f:
+        data = yaml.safe_load(f)
 
-def _strip_array_end(line: str) -> str:
-    return line[:-1] if _is_array_end(line) else line
+    if not data or "model" not in data:
+        raise ValueError(f"Invalid model config: missing 'model' key in {config_path}")
 
+    m = data["model"]
+    repo_id = m.get("id", "")
+    if not repo_id:
+        raise ValueError(f"Invalid model config: missing 'id' in {config_path}")
 
-def _parse_entry(line: str) -> ModelEntry | None:
-    line = line.strip()
-    if not line or line.startswith("#"):
-        return None
-    line = line.strip('"\'')
-    return ModelEntry.from_string(line) if line else None
+    # If file is specified, use it. Otherwise resolve best quant from HF.
+    filename = m.get("file", "")
+    url = ""
+    gpu_layers = int(m.get("gpu_layers", 999))
 
+    if not filename:
+        from gb_ai_server.infrastructure.persistence.hf_model_resolver import resolve_model
+        from gb_ai_server.infrastructure.persistence.hardware_prober import probe_hardware
 
-def load_models(models_conf_path: Path) -> list[ModelEntry]:
-    """Parse a bash-format models.conf.sh file into ModelEntry instances."""
-    if not models_conf_path.exists():
-        raise ValueError(f"Models config not found: {models_conf_path}")
+        hw = probe_hardware()
+        vram_gb = hw.vram_total_mb / 1024 if hw.vram_total_mb > 0 else 12.0
+        resolved = resolve_model(repo_id, vram_gb=vram_gb)
 
-    models: list[ModelEntry] = []
-    with open(models_conf_path) as f:
-        in_array = False
-        for line in f:
-            line = line.strip()
+        if resolved is None:
+            raise ValueError(
+                f"Could not load model from '{repo_id}'. "
+                f"GGUF repos on HuggingFace usually end with '-GGUF' "
+                f"(e.g. unsloth/Qwen3-14B-GGUF)."
+            )
 
-            if line.startswith("MODELS=("):
-                in_array = True
-                line = _strip_array_declaration(line)
+        filename = resolved.filename
+        url = resolved.download_url
 
-            if not in_array:
-                continue
+        print(f"  Resolved from HF: {resolved.filename}")
+        print(f"    Size: {resolved.size_gb:.1f} GB")
+        print(f"    Quant: {resolved.quantization}")
+        # Context window is computed at bootstrap time via fetch_safe_ctx_size,
+        # not stored in ModelEntry — HF lib is the source of truth.
 
-            if _is_array_end(line):
-                line = _strip_array_end(line)
-                in_array = False
+    if not url:
+        url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
 
-            entry = _parse_entry(line)
-            if entry:
-                models.append(entry)
+    display_name = repo_id.split("/")[-1]
 
-    return models
+    return [ModelEntry(
+        display_name=display_name,
+        filename=filename,
+        url=url,
+        n_gpu_layers=gpu_layers,
+    )]
