@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from gb_ai_server.application.utils import print_section
+from gb_ai_server.domain import ContainerNamer
 
 if TYPE_CHECKING:
     from gb_ai_server.application.ports.outbound import Logger
@@ -60,15 +61,16 @@ class ServiceLifecyclePresenter:
     def health_check_failed(self) -> None:
         self._logger.error("Health check failed")
 
-    def report_success(self, port: int = 8081) -> None:
+    def report_success(self, display_name: str = "model", port: int = 8081) -> None:
         print_section("Bootstrap Complete")
-        self._logger.ok("llama.cpp is running")
+        self._logger.ok(f"llama.cpp is running ({display_name})")
         print()
+        container = ContainerNamer.name()
         self._logger.info("Endpoints:")
         print(f"  API: http://localhost:{port}")
         print(f"  Health: http://localhost:{port}/health")
         print()
-        self._logger.info("View logs: podman logs -f llama-coder")
+        self._logger.info(f"View logs: podman logs -f {container}")
 
 
 class ModelSelectionPresenter:

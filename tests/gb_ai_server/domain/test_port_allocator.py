@@ -1,33 +1,21 @@
-"""Tests for PortAllocator domain logic."""
+"""Tests for PortAllocator domain logic (single-model server)."""
+
+import os
+from unittest.mock import patch
 
 import pytest
 from gb_ai_server.domain import PortAllocator
 
 
-class TestPortForModel:
-    def test_first_model_gets_base_port(self) -> None:
-        assert PortAllocator.port_for_model(0) == 8081
+class TestPort:
+    def test_default_port(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            assert PortAllocator.port() == 8081
 
-    def test_sequential_allocation(self) -> None:
-        assert PortAllocator.port_for_model(1) == 8082
-        assert PortAllocator.port_for_model(5) == 8086
+    def test_port_from_env_var(self) -> None:
+        with patch.dict(os.environ, {"LLAMA_PORT": "9090"}):
+            assert PortAllocator.port() == 9090
 
-    def test_raises_on_negative_index(self) -> None:
-        with pytest.raises(ValueError, match="cannot be negative"):
-            PortAllocator.port_for_model(-1)
-
-
-class TestPortsForModels:
-    def test_single_model(self) -> None:
-        assert PortAllocator.ports_for_models(1) == [8081]
-
-    def test_multiple_models(self) -> None:
-        assert PortAllocator.ports_for_models(3) == [8081, 8082, 8083]
-
-    def test_raises_on_zero_count(self) -> None:
-        with pytest.raises(ValueError, match="must be positive"):
-            PortAllocator.ports_for_models(0)
-
-    def test_raises_on_negative_count(self) -> None:
-        with pytest.raises(ValueError, match="must be positive"):
-            PortAllocator.ports_for_models(-1)
+    def test_invalid_env_var_falls_back_to_default(self) -> None:
+        with patch.dict(os.environ, {"LLAMA_PORT": "not-an-int"}):
+            assert PortAllocator.port() == 8081

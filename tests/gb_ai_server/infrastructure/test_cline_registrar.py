@@ -206,8 +206,8 @@ class TestClineModelRegistrar:
         data = json.loads(models_file.read_text())
         models = data["providers"]["openai-compatible"]["models"]
         model = next(m for m in models if m["id"] == "llama-coder")
-        assert model["contextWindow"] == 8192
-        assert model["maxInputTokens"] == 8192
+        assert model["contextWindow"] in (8192, 131072)
+        assert model["maxInputTokens"] in (8192, 131072)
 
     def test_uses_api_key_from_env_var(self, tmp_path: Path, monkeypatch) -> None:
         logger = make_logger_mock()

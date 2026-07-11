@@ -5,8 +5,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from gb_ai_server.domain import PortAllocator
-from gb_ai_server.infrastructure import ClineModelRegistrar, Environment
+from gb_ai_server.infrastructure import Environment
 from gb_ai_server.infrastructure.di.container import (
     InfrastructureRegistry,
     VerifierFactory,
@@ -15,10 +14,6 @@ from gb_ai_server.infrastructure.di.container import (
 )
 from gb_ai_server.presentation.composer import BootstrapCompositionRoot
 from gb_ai_server.presentation.parser import load_models
-from gb_ai_server.application.utils import print_section
-from gb_ai_server.presentation.presenter import (
-    ModelSelectionPresenter,
-)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,9 +38,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--models-dir",
-        type=Path,
-        default=Path(os.getenv("MODELS_DIR", "/tmp/llama_models")),
-        help="Directory for model files",
+        type=str,
+        default=None,
+        help="Colon-separated list of model directories (first is writable). "
+             "Overrides MODEL_DIRS and MODELS_DIR env vars.",
     )
     parser.add_argument(
         "--hf-token",
@@ -54,40 +50,56 @@ def build_parser() -> argparse.ArgumentParser:
         help="HuggingFace token for gated repositories",
     )
     parser.add_argument(
-        "--register-models",
+        "--register",
         action="store_true",
-        help="Register models with Cline (standalone, no bootstrap)",
+        help="Register model from .models.yaml with all agents",
+    )
+    parser.add_argument(
+        "--register-custom",
+        type=str,
+        default=None,
+        metavar="REPO_ID",
+        help="Register a custom HF model with all agents (e.g. unsloth/Qwen3-14B-GGUF)",
+    )
+    parser.add_argument(
+        "--ctx-size",
+        type=int,
+        default=0,
+        help="Context window size for --register-custom (0 = auto-detect)",
     )
     parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable debug logging",
     )
-    parser.add_argument(
-        "--model",
-        "-m",
-        type=str,
-        default=None,
-        help="Model to host (display name from models.conf.sh)",
-    )
-    parser.add_argument(
-        "--list-models",
-        action="store_true",
-        help="List available models and exit",
-    )
     return parser
+
+
+def _normalize_models_dirs(args: argparse.Namespace) -> None:
+    raw: str | None = args.models_dir
+    raw = raw or os.getenv("MODEL_DIRS") or os.getenv("MODELS_DIR")
+    if not raw:
+        raw = "/tmp/llama_models"
+    parts = [Path(d.strip()) for d in raw.split(":") if d.strip()]
+    if not parts:
+        parts = [Path("/tmp/llama_models")]
+    args.models_dirs = parts
+    args.models_dir = parts[0]
 
 
 def main(argv: list[str] | None = None) -> int:
     Environment.load_env_file(Path(".env"))
     parser = build_parser()
     args = parser.parse_args(argv)
+    _normalize_models_dirs(args)
 
-    if args.list_models:
-        return _list_models(args)
+    # Custom model registration (all agents)
+    if args.register_custom:
+        return _register_custom(args)
 
-    if args.register_models:
-        return _register_only(args)
+    # Register from .models.yaml (all agents)
+    if args.register:
+        return _register_from_config(args)
 
     infra = InfrastructureRegistry()
     root = BootstrapCompositionRoot(
@@ -99,84 +111,57 @@ def main(argv: list[str] | None = None) -> int:
     return root.run(args)
 
 
+def _register_custom(args: argparse.Namespace) -> int:
+    """Register a custom HuggingFace model with all agents."""
+    from gb_ai_server.application.services.register_custom_model_service import (
+        register_custom_model,
+    )
 
-def _list_models(args: argparse.Namespace) -> int:
-    infra = InfrastructureRegistry()
-    logger = infra.logger
-    env_root = Path(".").resolve()
-
-    models_config = env_root / "scripts" / "models.conf.sh"
-    if not models_config.exists():
-        logger.error("No models.conf.sh found")
+    results = register_custom_model(args.register_custom, args.ctx_size)
+    if not results:
+        print("No agents registered")
         return 1
 
-    models = load_models(models_config)
-    if not models:
-        logger.warn("No models configured")
-        return 0
-
-    print_section("Available Models")
-    for m in models:
-        logger.info(f"  {m.display_name:30s} {m.filename}")
-    print()
-    logger.info("Use: uv run gb-ai-server --model <name>")
+    for agent, ok in sorted(results.items()):
+        print(f"  [OK] {agent}" if ok else f"  [--] {agent}")
+    print(f"\nModel registered with {sum(results.values())}/{len(results)} agents")
     return 0
 
 
-def _register_only(args: argparse.Namespace) -> int:
-    infra = InfrastructureRegistry()
-    logger = infra.logger
-    model_sel = ModelSelectionPresenter(logger)
+def _register_from_config(args: argparse.Namespace) -> int:
+    """Register the model from .models.yaml with all agents."""
     env_root = Path(".").resolve()
-
-    models_config = env_root / "scripts" / "models.conf.sh"
-    if not models_config.exists():
-        logger.error("No models.conf.sh found")
+    config_path = env_root / ".models.yaml"
+    if not config_path.exists():
+        print("No .models.yaml found", file=sys.stderr)
         return 1
 
-    all_models = load_models(models_config)
-    if not all_models:
-        logger.warn("No models configured")
-        return 0
+    models = load_models(config_path)
+    if not models:
+        print("No model configured", file=sys.stderr)
+        return 1
 
-    if args.model:
-        selected = [m for m in all_models if m.display_name == args.model]
-        if not selected:
-            logger.error(f"Model '{args.model}' not found")
-            return 1
-        models = selected
-    else:
-        models = [all_models[0]]
+    model = models[0]
 
-    available = []
-    for m in models:
-        model_path = args.models_dir / m.filename
-        if model_path.exists():
-            available.append(m)
-        else:
-            model_sel.model_not_available(m.display_name, m.filename)
+    from gb_ai_server.application.services.register_custom_model_service import (
+        register_custom_model,
+    )
 
-    if not available:
-        logger.warn("No available models to register")
-        return 0
+    # Extract repo ID from URL or display name
+    repo_id = model.url.split("huggingface.co/")[-1].split("/resolve/")[0] if "huggingface.co" in model.url else model.display_name
 
-    model = available[0]
-    model_tuple = (model.display_name, model.filename, PortAllocator.port_for_model(0), "llama-coder")
+    # Pass 0 so register_custom_model computes the safe context from HF config +
+    # available VRAM. The explicit ctx_size in .models.yaml is for the server
+    # startup only; for registration we always want the hardware-aware value.
+    results = register_custom_model(repo_id, 0)
+    if not results:
+        print("No agents registered")
+        return 1
 
-    registrar = ClineModelRegistrar(logger)
-    models_factory = ModelServiceFactory(infra)
-    service = models_factory.model_registrar(registrar)
-
-    from gb_ai_server.application.dtos.requests.register_models_request import RegisterModelsRequest
-    request = RegisterModelsRequest(model=model_tuple)
-    response = service.execute(request)
-
-    if response.success:
-        logger.ok(f"Registered {model.display_name} with Cline (http://localhost:{PortAllocator.port_for_model(0)})")
-        return 0
-
-    logger.warn("Failed to register models with Cline")
-    return 1
+    for agent, ok in sorted(results.items()):
+        print(f"  {'✅' if ok else '❌'} {agent}")
+    print(f"\nModel {model.display_name} registered with {sum(results.values())}/{len(results)} agents")
+    return 0
 
 
 if __name__ == "__main__":
