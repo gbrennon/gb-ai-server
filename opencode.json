@@ -48,8 +48,8 @@
         "qwen-qwen2.5-coder-7b-instruct-gguf": {
           "name": "Qwen2.5-Coder-7B-Instruct-GGUF",
           "limit": {
-            "context": 32768,
-            "output": 32768
+            "context": 65536,
+            "output": 65536
           }
         }
       }
