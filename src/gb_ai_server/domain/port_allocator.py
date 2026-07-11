@@ -1,19 +1,23 @@
-"""Port allocation strategy."""
+"""Port allocation strategy (single-model server)."""
+
+import os
 
 
 class PortAllocator:
-    """Allocate ports for llama.cpp instances without conflicts."""
+    """Fixed port for the single llama.cpp instance.
 
-    BASE_PORT: int = 8081
+    The port can be overridden via the LLAMA_PORT environment variable.
+    """
 
-    @staticmethod
-    def port_for_model(model_index: int) -> int:
-        if model_index < 0:
-            raise ValueError("Model index cannot be negative")
-        return PortAllocator.BASE_PORT + model_index
+    DEFAULT_PORT: int = 8081
 
     @staticmethod
-    def ports_for_models(count: int) -> list[int]:
-        if count <= 0:
-            raise ValueError("Model count must be positive")
-        return [PortAllocator.port_for_model(i) for i in range(count)]
+    def port() -> int:
+        raw = os.environ.get("LLAMA_PORT")
+        if raw is not None:
+            try:
+                return int(raw.strip())
+            except (ValueError, TypeError):
+                pass
+        return PortAllocator.DEFAULT_PORT
+
