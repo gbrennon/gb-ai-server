@@ -24,6 +24,7 @@ class PodmanComposeBuiltinLifecycle(ComposeLifecycle):
         ]
         if detach:
             args.append("-d")
+        args.append("--force-recreate")
         args.extend(services)
         return Command.run(*args, capture_output=True)
 
