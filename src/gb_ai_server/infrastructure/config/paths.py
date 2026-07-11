@@ -15,7 +15,7 @@ class EnvironmentPaths:
 
     @property
     def models_config_path(self) -> Path:
-        return self._repo_root / "scripts" / "models.conf.sh"
+        return self._repo_root / ".models.yaml"
 
     @property
     def compose_file(self) -> Path:

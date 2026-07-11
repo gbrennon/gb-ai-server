@@ -21,12 +21,13 @@ class TestModelEntryFromString:
         with pytest.raises(ValueError, match="Invalid model entry format"):
             ModelEntry.from_string("only|two")
 
-    def test_parses_five_part_format(self) -> None:
+    def test_parses_five_part_format_gpu_layers(self) -> None:
+        # ctx_size field (5th part) is accepted for backward compatibility but not stored.
+        # Only n_gpu_layers is preserved.
         entry = ModelEntry.from_string("qwen:7b|qwen.gguf|https://example.com/q|999|8192")
         assert entry.display_name == "qwen:7b"
         assert entry.filename == "qwen.gguf"
         assert entry.n_gpu_layers == 999
-        assert entry.ctx_size == 8192
 
     def test_raises_on_too_many_parts(self) -> None:
         with pytest.raises(ValueError, match="Invalid model entry format"):
@@ -52,58 +53,35 @@ class TestModelEntryFromTuple:
         assert entry.filename == "model.gguf"
         assert entry.url == "https://example.com/m.gguf"
         assert entry.n_gpu_layers == 999
-        assert entry.ctx_size == 8192
 
-    def test_from_five_tuple(self) -> None:
+    def test_from_five_tuple_preserves_gpu_layers(self) -> None:
+        # ctx_size (5th element) is accepted for backward compatibility but not stored.
         entry = ModelEntry.from_tuple(("m", "f.gguf", "https://example.com/f", 50, 4096))
         assert entry.display_name == "m"
         assert entry.n_gpu_layers == 50
-        assert entry.ctx_size == 4096
 
 
+class TestModelEntryNoCtxSizeField:
+    """ModelEntry must not hold a ctx_size field — context window comes from HF lib."""
 
-class TestModelEntryDynamicCtxSize:
-    """Tests for CTX_SIZE environment variable override."""
-
-    def test_default_is_8192_when_no_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("CTX_SIZE", raising=False)
+    def test_has_no_ctx_size_attribute(self) -> None:
         entry = ModelEntry("a", "b.gguf", "https://example.com/b.gguf")
-        assert entry.ctx_size == 8192
+        assert not hasattr(entry, "ctx_size"), (
+            "ModelEntry must not store ctx_size — use fetch_safe_ctx_size() instead"
+        )
 
-    def test_default_from_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("CTX_SIZE", "32768")
+    def test_env_var_has_no_effect_on_model_entry(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CTX_SIZE", "99999")
         entry = ModelEntry("a", "b.gguf", "https://example.com/b.gguf")
-        assert entry.ctx_size == 32768
+        assert not hasattr(entry, "ctx_size")
 
-    def test_from_string_respects_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("CTX_SIZE", "16384")
-        entry = ModelEntry.from_string("qwen:7b|qwen.gguf|https://example.com/q")
-        assert entry.ctx_size == 16384
-
-    def test_five_part_string_overrides_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("CTX_SIZE", "32768")
+    def test_five_part_string_does_not_expose_ctx(self) -> None:
         entry = ModelEntry.from_string("qwen:7b|qwen.gguf|https://example.com/q|999|4096")
-        assert entry.ctx_size == 4096
+        assert not hasattr(entry, "ctx_size")
 
-    def test_invalid_env_var_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("CTX_SIZE", "not-a-number")
-        entry = ModelEntry("a", "b.gguf", "https://example.com/b.gguf")
-        assert entry.ctx_size == 8192
-
-    def test_empty_env_var_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("CTX_SIZE", "")
-        entry = ModelEntry("a", "b.gguf", "https://example.com/b.gguf")
-        assert entry.ctx_size == 8192
-
-    def test_from_tuple_respects_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("CTX_SIZE", "24576")
-        entry = ModelEntry.from_tuple(("m", "f.gguf", "https://example.com/f"))
-        assert entry.ctx_size == 24576
-
-    def test_five_tuple_overrides_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("CTX_SIZE", "32768")
+    def test_five_tuple_does_not_expose_ctx(self) -> None:
         entry = ModelEntry.from_tuple(("m", "f.gguf", "https://example.com/f", 50, 4096))
-        assert entry.ctx_size == 4096
+        assert not hasattr(entry, "ctx_size")
 
 
 class TestModelEntryStr:

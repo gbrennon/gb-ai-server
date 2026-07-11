@@ -58,8 +58,21 @@ class ResourceRequirementsMapper:
 
     @staticmethod
     def context_size_for_model(filename: str) -> int:
-        """Resolve the context window size for a model based on its filename.
+        """Resolve context window using GGUF metadata when file is available."""
+        import os
+        from gb_ai_server.infrastructure.persistence.gguf_reader import read_context_window
 
-        Delegates to requirements_for_model() and returns only the context_size.
-        """
+        # Try GGUF file in known locations
+        search_dirs = os.environ.get("MODEL_DIRS", os.environ.get("MODELS_DIR", "")).split(":")
+        search_dirs = [d for d in search_dirs if d]
+        search_dirs.append(os.getcwd())
+
+        for base in search_dirs:
+            candidate = os.path.join(base, filename)
+            if os.path.exists(candidate):
+                ctx = read_context_window(candidate)
+                if ctx:
+                    return ctx
+
+        # Fall back to pattern-based estimation
         return ResourceRequirementsMapper.requirements_for_model(filename).context_size

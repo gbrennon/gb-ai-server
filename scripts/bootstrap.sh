@@ -94,7 +94,7 @@ start_container_stack() {
 copy_models_to_container() {
   log_section "Copy Models to Container"
   source "$SCRIPT_DIR/models.conf.sh"
-  local container="llama-coder"
+  local container="${LLAMA_CONTAINER_NAME:-llama-coder}"
 
   if ! container_is_running "$container"; then
     log_warn "Container $container not running, skipping model copy"
@@ -119,58 +119,35 @@ copy_models_to_container() {
 
 restart_llama_container() {
   log_section "Restart llama.cpp"
+  local container="${LLAMA_CONTAINER_NAME:-llama-coder}"
   if ! is_dry_run; then
-    log_info "Restarting llama-coder to load model..."
-    podman restart llama-coder 2>&1 || log_warn "Failed to restart llama-coder"
+    log_info "Restarting $container to load model..."
+    podman restart "$container" 2>&1 || log_warn "Failed to restart $container"
   fi
 }
 
 wait_for_llama_server() {
   log_section "Waiting for llama.cpp"
+  local port="${LLAMA_PORT:-8081}"
   dry_run_info "Would wait for llama.cpp"
   if ! is_dry_run; then
-    wait_for_llama "http://localhost:8081" 60 5 || {
+    wait_for_llama "http://localhost:${port}" 60 5 || {
       log_error "llama.cpp did not become healthy in time."
-      log_error "Check: podman logs llama-coder"
+      log_error "Check: podman logs ${LLAMA_CONTAINER_NAME:-llama-coder}"
       exit 1
     }
   fi
-}
-
-verify_via_api() {
-  log_section "Verify Models via HTTP API"
-  source "$SCRIPT_DIR/models.conf.sh"
-  local all_ready=true
-  local ports=("8081" "8082" "8083")
-  local idx=0
-  for entry in "${MODELS[@]}"; do
-    local name port
-    name=$(get_model_display_name "$entry")
-    port="${ports[$idx]}"
-    local http_code
-    http_code=$(curl -sf "http://localhost:${port}/health" -o /dev/null -w "%{http_code}" 2>/dev/null || echo "000")
-    if [[ "$http_code" == "200" ]]; then
-      log_ok "$name is available on :${port}"
-    else
-      log_warn "$name not yet available on :${port} (HTTP $http_code)"
-      all_ready=false
-    fi
-    idx=$((idx + 1))
-  done
-  $all_ready
-}
+} 
 
 finalize() {
+  local container="${LLAMA_CONTAINER_NAME:-llama-coder}"
+  local port="${LLAMA_PORT:-8081}"
   log_section "Done"
   log_ok "Bootstrap complete."
   echo ""
   log_info "Services:"
-  echo "    llama.cpp (coder) : http://localhost:8081"
-  echo "    Open WebUI        : http://localhost:3000"
-  echo ""
-  log_info "Extra models (make up-extra):"
-  echo "    llama.cpp (qwen3) : http://localhost:8082"
-  echo "    llama.cpp (devs)  : http://localhost:8083"
+  echo "    llama.cpp : http://localhost:${port}"
+  echo "    Open WebUI : http://localhost:3000"
   echo ""
 }
 
@@ -183,12 +160,11 @@ main() {
   copy_models_to_container
   restart_llama_container
   wait_for_llama_server
-  verify_via_api || true
 
-  # Auto register models with Cline
+  # Auto register model with Cline
   if command -v uv >/dev/null 2>&1; then
-    log_info "Registering models with Cline..."
-    uv run gb-ai-server --register-models --skip-download --skip-health || log_warn "Failed to auto-register models with Cline"
+    log_info "Registering model with Cline..."
+    uv run gb-ai-server --register-models --skip-download --skip-health || log_warn "Failed to auto-register model with Cline"
   fi
 
   finalize

@@ -17,18 +17,21 @@ class PodmanComposeStandaloneLifecycle(ComposeLifecycle):
     ) -> CommandResult:
         args = [
             "podman-compose",
+            "--env-file", ".env",
             "-f",
             str(compose_file),
             "up",
         ]
         if detach:
             args.append("-d")
+        args.append("--force-recreate")
         args.extend(services)
         return Command.run(*args, capture_output=True)
 
     def down(self, compose_file: Path) -> CommandResult:
         return Command.run(
             "podman-compose",
+            "--env-file", ".env",
             "-f",
             str(compose_file),
             "down",
@@ -44,6 +47,7 @@ class PodmanComposeStandaloneLifecycle(ComposeLifecycle):
     ) -> CommandResult:
         args = [
             "podman-compose",
+            "--env-file", ".env",
             "-f",
             str(compose_file),
             "restart",

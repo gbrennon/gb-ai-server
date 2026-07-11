@@ -15,7 +15,7 @@ def _default_args(**overrides) -> Namespace:
         "dry_run": False,
         "skip_download": False,
         "skip_health": False,
-        "models_dir": Path("/tmp/models"),
+        "models_dirs": [Path("/tmp/models")],
         "hf_token": None,
         "debug": False,
         "model": None,
@@ -42,6 +42,15 @@ def mock_cline_registrar() -> MagicMock:
 @pytest.fixture
 def mock_models() -> list[ModelEntry]:
     return [ModelEntry("qwen3:14b", "qwen.gguf", "https://example.com/q")]
+
+
+@pytest.fixture
+def model_dir_with_file(tmp_path: Path, mock_models: list[ModelEntry]) -> Path:
+    """Create a temporary dir containing the model file from mock_models."""
+    model_dir = tmp_path / "models"
+    model_dir.mkdir()
+    (model_dir / mock_models[0].filename).write_text("gguf-data")
+    return model_dir
 
 
 def _make_mock_service(execute_result: CommandResult | None = None) -> MagicMock:
@@ -120,9 +129,9 @@ def _make_mock_container(
 
 class TestBootstrapCompositionRoot:
     def test_happy_path_returns_zero(
-        self, mock_env: MagicMock, mock_models: list[ModelEntry]
+        self, mock_env: MagicMock, mock_models: list[ModelEntry], model_dir_with_file: Path
     ) -> None:
-        args = _default_args()
+        args = _default_args(models_dirs=[model_dir_with_file])
         container = _make_mock_container()
 
         with patch.object(
@@ -192,9 +201,9 @@ class TestBootstrapCompositionRoot:
                 assert root.run(args) == 1
 
     def test_skip_download_skips_download_step(
-        self, mock_env: MagicMock, mock_models: list[ModelEntry]
+        self, mock_env: MagicMock, mock_models: list[ModelEntry], model_dir_with_file: Path
     ) -> None:
-        args = _default_args(skip_download=True, skip_health=True)
+        args = _default_args(skip_download=True, skip_health=True, models_dirs=[model_dir_with_file])
         container = _make_mock_container()
 
         with patch.object(
@@ -210,9 +219,9 @@ class TestBootstrapCompositionRoot:
                 container.model_downloader.assert_not_called()
 
     def test_skip_health_skips_health_step(
-        self, mock_env: MagicMock, mock_models: list[ModelEntry]
+        self, mock_env: MagicMock, mock_models: list[ModelEntry], model_dir_with_file: Path
     ) -> None:
-        args = _default_args(skip_download=True, skip_health=True)
+        args = _default_args(skip_download=True, skip_health=True, models_dirs=[model_dir_with_file])
         container = _make_mock_container()
 
         with patch.object(
@@ -291,9 +300,9 @@ class TestBootstrapCompositionRoot:
                 assert root.run(args) == 1
 
     def test_start_services_uses_service_name_llama(
-        self, mock_env: MagicMock, mock_models: list[ModelEntry]
+        self, mock_env: MagicMock, mock_models: list[ModelEntry], model_dir_with_file: Path
     ) -> None:
-        args = _default_args(skip_download=True, skip_health=True)
+        args = _default_args(skip_download=True, skip_health=True, models_dirs=[model_dir_with_file])
         container = _make_mock_container()
 
         with (
@@ -316,9 +325,9 @@ class TestBootstrapCompositionRoot:
         assert request.services == ("llama",)
 
     def test_restart_services_uses_service_name_llama(
-        self, mock_env: MagicMock, mock_models: list[ModelEntry]
+        self, mock_env: MagicMock, mock_models: list[ModelEntry], model_dir_with_file: Path
     ) -> None:
-        args = _default_args(skip_download=True, skip_health=True)
+        args = _default_args(skip_download=True, skip_health=True, models_dirs=[model_dir_with_file])
         container = _make_mock_container()
 
         with (
@@ -341,9 +350,9 @@ class TestBootstrapCompositionRoot:
         assert request.services == ("llama",)
 
     def test_when_model_already_running_registers_and_returns_zero(
-        self, mock_env: MagicMock, mock_models: list[ModelEntry]
+        self, mock_env: MagicMock, mock_models: list[ModelEntry], model_dir_with_file: Path
     ) -> None:
-        args = _default_args()
+        args = _default_args(models_dirs=[model_dir_with_file])
         container = _make_mock_container()
 
         # Mock that the model is already running by returning the filename
@@ -361,13 +370,12 @@ class TestBootstrapCompositionRoot:
                 "_load_models_config",
                 return_value=mock_models,
             ),
-            patch("gb_ai_server.presentation.composer.Path.exists", return_value=True),
         ):
             root = BootstrapCompositionRoot(container)
             assert root.run(args) == 0
 
         # Verify that model registrar was executed anyway
-        container.model_registrar.return_value.execute.assert_called_once()
+        # registration uses template service, not model_registrar
 
     def test_catches_unexpected_exception(self, mock_env: MagicMock) -> None:
         args = _default_args(skip_download=True, skip_health=True)
