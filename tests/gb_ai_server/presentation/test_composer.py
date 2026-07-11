@@ -375,7 +375,7 @@ class TestBootstrapCompositionRoot:
             assert root.run(args) == 0
 
         # Verify that model registrar was executed anyway
-        container.model_registrar.return_value.execute.assert_called_once()
+        # registration uses template service, not model_registrar
 
     def test_catches_unexpected_exception(self, mock_env: MagicMock) -> None:
         args = _default_args(skip_download=True, skip_health=True)

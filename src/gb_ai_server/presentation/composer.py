@@ -9,7 +9,7 @@ from pathlib import Path
 
 from typing import TYPE_CHECKING
 
-from gb_ai_server.domain import ModelEntry
+from gb_ai_server.domain import ModelEntry, PortAllocator, ContainerNamer
 from gb_ai_server.infrastructure import (
     InfrastructureRegistry,
     VerifierFactory,
@@ -48,9 +48,44 @@ if TYPE_CHECKING:
         ComposeLifecycle,
     )
 
-CONTAINER_NAME = "llama-coder"
 COMPOSE_SERVICE_NAME = "llama"
-DEFAULT_PORT = 8081
+
+
+def _estimate_model_size_gb(model: ModelEntry) -> float:
+    """Estimate model size in GB from local GGUF file or HF API."""
+    # Try local GGUF file first
+    try:
+        from pathlib import Path
+        import os
+        vol = os.path.expanduser(
+            "~/.local/share/containers/storage/volumes/llama_models/_data"
+        )
+        candidate = Path(vol) / model.filename
+        if candidate.exists():
+            return candidate.stat().st_size / 1e9
+    except Exception:
+        pass
+
+    # Try HF model resolver
+    try:
+        from gb_ai_server.infrastructure.persistence.hf_model_resolver import resolve_model
+        repo_id = None
+        for part in model.url.split("/"):
+            if part.endswith("-GGUF") or part.endswith("-gguf"):
+                idx = model.url.index(part)
+                url_path = model.url[:idx + len(part)].replace("https://huggingface.co/", "")
+                # Extract org/repo from URL
+                parts = model.url.replace("https://huggingface.co/", "").split("/")
+                repo_id = "/".join(parts[:2])
+                break
+        if repo_id:
+            resolved = resolve_model(repo_id)
+            if resolved:
+                return resolved.size_gb
+    except Exception:
+        pass
+
+    return 8.0  # sensible default for Q4_K_M quantized models
 
 
 class BootstrapCompositionRoot:
@@ -105,7 +140,7 @@ class BootstrapCompositionRoot:
                     _, _, port = self._get_service_info(model)
                     self._model_selection_presenter.model_already_running(model.display_name)
                     self._register_models(resolver, model)
-                    self._service_presenter.report_success(port=port)
+                    self._service_presenter.report_success(display_name=model.display_name, port=port)
                     return 0
                 self._model_selection_presenter.switching_model(
                     self._model_name_for_filename(all_models, running_model),
@@ -123,7 +158,7 @@ class BootstrapCompositionRoot:
             self._verify_health(args, model)
             self._register_models(resolver, model)
             _, _, port = self._get_service_info(model)
-            self._service_presenter.report_success(port=port)
+            self._service_presenter.report_success(display_name=model.display_name, port=port)
             return 0
         except SystemExit:
             return 1
@@ -152,15 +187,9 @@ class BootstrapCompositionRoot:
     def _resolve_model(
         self, all_models: list[ModelEntry], args: Namespace
     ) -> ModelEntry | None:
-        if args.model:
-            for m in all_models:
-                if m.display_name == args.model:
-                    return m
-            self._model_selection_presenter.model_not_found(args.model)
-            available = [(m.display_name, m.filename) for m in all_models]
-            self._model_selection_presenter.list_available_models(available)
+        # Single model — always use the first (and only) configured model
+        if not all_models:
             return None
-
         return all_models[0]
 
     def _model_name_for_filename(
@@ -172,12 +201,43 @@ class BootstrapCompositionRoot:
         return filename
 
     def _get_service_info(self, model: ModelEntry) -> tuple[str, str, int]:
-        return (COMPOSE_SERVICE_NAME, CONTAINER_NAME, DEFAULT_PORT)
+        return (COMPOSE_SERVICE_NAME, ContainerNamer.name(), PortAllocator.port())
 
     def _set_model_env(self, model: ModelEntry) -> None:
         os.environ["LLAMA_MODEL"] = model.filename
         os.environ["N_GPU_LAYERS"] = str(model.n_gpu_layers)
-        os.environ["CTX_SIZE"] = str(model.ctx_size)
+        # Use HF config.json + VRAM to compute the largest safe context window.
+        # This is the authoritative value written to .env and passed to the container.
+        from gb_ai_server.infrastructure.persistence.fetch_hf_ctx import fetch_safe_ctx_size
+        repo_id = (
+            model.url.split("huggingface.co/")[-1].split("/resolve/")[0]
+            if "huggingface.co" in model.url
+            else model.display_name
+        )
+        ctx = fetch_safe_ctx_size(repo_id)
+        os.environ["CTX_SIZE"] = str(ctx)
+
+        # Write to .env so docker-compose picks it up (overrides existing values)
+        env_path = Path(".env")
+        if env_path.exists():
+            lines = env_path.read_text().splitlines()
+            new_lines = []
+            written = {"LLAMA_MODEL", "N_GPU_LAYERS", "CTX_SIZE"}
+            for line in lines:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    new_lines.append(line)
+                    continue
+                key = stripped.split("=")[0].strip()
+                if key in written and key in os.environ:
+                    new_lines.append(f"{key}={os.environ[key]}")
+                    written.discard(key)
+                else:
+                    new_lines.append(line)
+            for key in written:
+                if key in os.environ:
+                    new_lines.append(f"{key}={os.environ[key]}")
+            env_path.write_text("\n".join(new_lines) + "\n")
 
     def _detect_running_model(
         self, inspector: ContainerInspector | None, model: ModelEntry
@@ -197,6 +257,9 @@ class BootstrapCompositionRoot:
         service.execute(
             StopServicesRequest(compose_file=str(env.paths.compose_file))
         )
+        # Allow VRAM to be fully released before starting new container
+        import time
+        time.sleep(3)
 
     def _verify_prerequisites(self, env) -> VerifyPrerequisitesResponse:
         verifier = self._verifiers.prerequisite_verifier()
@@ -226,6 +289,36 @@ class BootstrapCompositionRoot:
             self._prerequisite_presenter.skipping_download()
             self._model_selection_presenter.model_not_available(
                 model.display_name, model.filename
+            )
+            return None
+
+        # Check if model fits on hardware before downloading
+        from gb_ai_server.infrastructure.persistence.hardware_prober import (
+            probe_hardware,
+            model_fits,
+        )
+        from gb_ai_server.infrastructure.persistence.fetch_hf_ctx import fetch_safe_ctx_size
+        hw = probe_hardware()
+        repo_id_for_ctx = (
+            model.url.split("huggingface.co/")[-1].split("/resolve/")[0]
+            if "huggingface.co" in model.url
+            else model.display_name
+        )
+        ctx = fetch_safe_ctx_size(repo_id_for_ctx)
+
+        # Estimate model size from GGUF metadata or HF
+        model_size_gb = _estimate_model_size_gb(model)
+
+        fits, reason = model_fits(hw, model_size_gb, ctx,
+                                  gguf_path=str(resolver.primary() / model.filename))
+        self._infra.logger.info(f"Hardware: {hw.gpu_name + ' ' if hw.gpu_name else ''}"
+                                f"VRAM free={hw.vram_free_mb}MiB RAM={hw.ram_total_mb}MiB")
+        self._infra.logger.info(f"Model: {model_size_gb:.1f}GB ctx={ctx} → {reason}")
+
+        if not fits:
+            self._infra.logger.error(
+                f"Model {model.display_name} ({model_size_gb:.1f}GB, ctx={ctx}) "
+                f"does not fit on this hardware. Try a smaller quantization."
             )
             return None
 
@@ -320,17 +413,22 @@ class BootstrapCompositionRoot:
             self._model_selection_presenter.model_not_available(model.display_name, model.filename)
             return
 
-        registrar = ClineModelRegistrar(self._infra.logger)
-        service = self._models.model_registrar(registrar)
+        from gb_ai_server.application.services.register_custom_model_service import (
+            register_custom_model,
+        )
 
-        _, container_name, port = self._get_service_info(model)
-        model_tuple = (model.display_name, model.filename, port, container_name)
+        repo_id = (
+            model.url.split("huggingface.co/")[-1].split("/resolve/")[0]
+            if "huggingface.co" in model.url
+            else model.display_name
+        )
 
-        from gb_ai_server.application.dtos.requests.register_models_request import RegisterModelsRequest
-        request = RegisterModelsRequest(model=model_tuple)
-        response = service.execute(request)
-        if response.success:
-            self._registration_presenter.models_registered([model.display_name])
+        # Pass 0 — register_custom_model calls fetch_safe_ctx_size internally,
+        # using HF config.json + live VRAM to compute the correct limit.
+        results = register_custom_model(repo_id, 0)
+        registered = [a for a, ok in results.items() if ok]
+        if registered:
+            self._registration_presenter.models_registered(registered)
         else:
             self._registration_presenter.registration_failed()
 

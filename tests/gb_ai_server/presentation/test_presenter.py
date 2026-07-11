@@ -68,8 +68,8 @@ class TestServiceLifecyclePresenter:
 
     def test_report_success_calls_all_outputs(self) -> None:
         logger = make_logger()
-        ServiceLifecyclePresenter(logger).report_success()
-        logger.ok.assert_called_once_with("llama.cpp is running")
+        ServiceLifecyclePresenter(logger).report_success(display_name="test-model")
+        logger.ok.assert_called_once_with("llama.cpp is running (test-model)")
 
 
 class TestModelSelectionPresenter:
