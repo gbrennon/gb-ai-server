@@ -16,6 +16,7 @@ from ...application.services import (
     HealthVerifierService,
     RegisterModelsService,
 )
+from ..cdi import CdiService
 from ..logging import TerminalLogger
 from ..container_runtime.detector import FallbackRuntimeDetector
 from ..compose.detector import FallbackComposeDetector
@@ -35,6 +36,7 @@ class InfrastructureRegistry:
         self._runtime_detector = FallbackRuntimeDetector()
         self._compose_detector = FallbackComposeDetector()
         self._http_client = CurlHttpClient()
+        self._cdi_service = CdiService(self._logger)
 
     @property
     def logger(self) -> TerminalLogger:
@@ -51,6 +53,10 @@ class InfrastructureRegistry:
     @property
     def http_client(self) -> CurlHttpClient:
         return self._http_client
+
+    @property
+    def cdi_service(self) -> CdiService:
+        return self._cdi_service
 
 
 class VerifierFactory:
