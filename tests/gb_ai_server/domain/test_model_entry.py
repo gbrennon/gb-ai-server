@@ -21,14 +21,14 @@ class TestModelEntryFromString:
         with pytest.raises(ValueError, match="Invalid model entry format"):
             ModelEntry.from_string("only|two")
 
-    def test_parses_five_part_format_gpu_layers(self) -> None:
-        # ctx_size field (5th part) is accepted for backward compatibility but not stored.
-        # Only n_gpu_layers is preserved.
+    def test_parses_five_part_format(self) -> None:
+        # Both n_gpu_layers and ctx_size fields (4th and 5th parts) are accepted
+        # for backward compatibility but NOT stored — calculated at runtime.
         entry = ModelEntry.from_string("qwen:7b|qwen.gguf|https://example.com/q|999|8192")
         assert entry.display_name == "qwen:7b"
         assert entry.filename == "qwen.gguf"
-        assert entry.n_gpu_layers == 999
-
+        assert entry.url == "https://example.com/q"
+        assert not hasattr(entry, "n_gpu_layers")
     def test_raises_on_too_many_parts(self) -> None:
         with pytest.raises(ValueError, match="Invalid model entry format"):
             ModelEntry.from_string("a|b|c|d|e|f")
@@ -52,14 +52,14 @@ class TestModelEntryFromTuple:
         assert entry.display_name == "my-model"
         assert entry.filename == "model.gguf"
         assert entry.url == "https://example.com/m.gguf"
-        assert entry.n_gpu_layers == 999
+        assert not hasattr(entry, "n_gpu_layers")
 
-    def test_from_five_tuple_preserves_gpu_layers(self) -> None:
-        # ctx_size (5th element) is accepted for backward compatibility but not stored.
+    def test_from_five_tuple_ignores_extra(self) -> None:
+        # n_gpu_layers and ctx_size (4th and 5th elements) are accepted
+        # for backward compatibility but NOT stored — calculated at runtime.
         entry = ModelEntry.from_tuple(("m", "f.gguf", "https://example.com/f", 50, 4096))
         assert entry.display_name == "m"
-        assert entry.n_gpu_layers == 50
-
+        assert not hasattr(entry, "n_gpu_layers")
 
 class TestModelEntryNoCtxSizeField:
     """ModelEntry must not hold a ctx_size field — context window comes from HF lib."""

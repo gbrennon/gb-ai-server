@@ -21,7 +21,7 @@ class TestLoadModels:
         assert len(models) == 1
         assert models[0].display_name == "Qwen3-14B-GGUF"
         assert models[0].filename == "Qwen3-14B-Q4_K_M.gguf"
-        assert models[0].n_gpu_layers == 999
+        assert not hasattr(models[0], "n_gpu_layers")
         assert not hasattr(models[0], "ctx_size")
 
     def test_parses_minimal_yaml(self, tmp_path: Path) -> None:
@@ -53,7 +53,7 @@ class TestLoadModels:
         conf = tmp_path / ".models.yaml"
         conf.write_text("model:\n  id: unsloth/Qwen3-14B-GGUF\n  file: model.gguf\n")
         models = load_models(conf)
-        assert models[0].n_gpu_layers == 999
+        assert not hasattr(models[0], "n_gpu_layers")
 
     def test_no_ctx_size_on_model_entry(self, tmp_path: Path) -> None:
         # ctx_size is not stored on ModelEntry — the HF lib computes it at runtime.
