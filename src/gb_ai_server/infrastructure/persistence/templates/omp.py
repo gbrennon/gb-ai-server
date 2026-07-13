@@ -95,7 +95,7 @@ def _has_cline_key() -> bool:
     return bool(os.environ.get("CLINE_USER_KEY", "").startswith("sk_"))
 
 
-def register(display_name: str, container_name: str, ctx_size: int, port: int = 8081) -> bool:
+def register(display_name: str, container_name: str, ctx_size: int, port: int = 8081, n_gpu_layers: int = 999) -> bool:
     omp_dir = _omp_dir()
     omp_dir.mkdir(parents=True, exist_ok=True)
 

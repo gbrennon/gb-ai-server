@@ -40,7 +40,7 @@ def _probe_server_ctx(port: int) -> int | None:
         return None
 
 
-def register(display_name: str, container_name: str, ctx_size: int, port: int = 8081) -> bool:
+def register(display_name: str, container_name: str, ctx_size: int, port: int = 8081, n_gpu_layers: int = 999) -> bool:
     project_root = _find_project_root()
     if project_root is None:
         return False

@@ -2,7 +2,8 @@
 
 Add a new agent by dropping a .py file here with a register() function:
 
-    def register(display_name: str, container_name: str, ctx_size: int, port: int) -> bool:
+    def register(display_name: str, container_name: str, ctx_size: int,
+                 port: int = 8081, n_gpu_layers: int = 999) -> bool:
         ...
 
 Return True on success, False if the agent is not installed (skip silently).
@@ -36,12 +37,13 @@ def register_all(
     container_name: str,
     ctx_size: int,
     port: int = 8081,
+    n_gpu_layers: int = 999,
 ) -> dict[str, bool]:
     """Run register() on all discovered templates. Returns {agent_name: success}."""
     results: dict[str, bool] = {}
     for name, mod in discover_templates():
         try:
-            results[name] = mod.register(display_name, container_name, ctx_size, port)
+            results[name] = mod.register(display_name, container_name, ctx_size, port, n_gpu_layers)
         except Exception:
             results[name] = False
     return results

@@ -13,7 +13,7 @@ def _vibe_dir() -> Path:
     return Path(env) if env else Path.home() / ".vibe"
 
 
-def register(display_name: str, container_name: str, ctx_size: int, port: int = 8081) -> bool:
+def register(display_name: str, container_name: str, ctx_size: int, port: int = 8081, n_gpu_layers: int = 999) -> bool:
     vibe_home = _vibe_dir()
     vibe_home.mkdir(parents=True, exist_ok=True)
     config_path = vibe_home / "config.toml"
