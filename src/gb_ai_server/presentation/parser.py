@@ -14,8 +14,8 @@ def load_models(config_path: Path) -> list[ModelEntry]:
         model:
           id: unsloth/Qwen3-14B-GGUF     # required
           file: Qwen3-14B-Q4_K_M.gguf    # optional (auto-detected)
-          gpu_layers: 999                # optional (default 999)
-          ctx_size: 0                    # optional (0 = auto-detect)
+          gpu_layers: 999                # optional (ignored — calculated at runtime)
+          ctx_size: 0                    # optional (ignored — calculated at runtime)
     """
     import yaml
 
@@ -34,9 +34,10 @@ def load_models(config_path: Path) -> list[ModelEntry]:
         raise ValueError(f"Invalid model config: missing 'id' in {config_path}")
 
     # If file is specified, use it. Otherwise resolve best quant from HF.
+    # gpu_layers and ctx_size from YAML are ignored — both are calculated
+    # at runtime from HF config.json + available VRAM.
     filename = m.get("file", "")
     url = ""
-    gpu_layers = int(m.get("gpu_layers", 999))
 
     if not filename:
         from gb_ai_server.infrastructure.persistence.hf_model_resolver import resolve_model
@@ -59,8 +60,6 @@ def load_models(config_path: Path) -> list[ModelEntry]:
         print(f"  Resolved from HF: {resolved.filename}")
         print(f"    Size: {resolved.size_gb:.1f} GB")
         print(f"    Quant: {resolved.quantization}")
-        # Context window is computed at bootstrap time via fetch_safe_ctx_size,
-        # not stored in ModelEntry — HF lib is the source of truth.
 
     if not url:
         url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
@@ -71,5 +70,4 @@ def load_models(config_path: Path) -> list[ModelEntry]:
         display_name=display_name,
         filename=filename,
         url=url,
-        n_gpu_layers=gpu_layers,
     )]

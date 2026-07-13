@@ -132,6 +132,7 @@ class BootstrapCompositionRoot:
             self._set_model_env(model)
 
             prereqs = self._verify_prerequisites(env)
+            self._ensure_cdi()
             resolver = ModelPathResolver(args.models_dirs)
 
             running_model = self._detect_running_model(prereqs.inspector, model)
@@ -204,18 +205,45 @@ class BootstrapCompositionRoot:
         return (COMPOSE_SERVICE_NAME, ContainerNamer.name(), PortAllocator.port())
 
     def _set_model_env(self, model: ModelEntry) -> None:
+        """Set LLAMA_MODEL, N_GPU_LAYERS, and CTX_SIZE environment variables.
+
+        Both N_GPU_LAYERS and CTX_SIZE are calculated from HuggingFace model
+        metadata and available VRAM — not hardcoded or pattern-matched.
+        """
+        from gb_ai_server.infrastructure.persistence.fetch_hf_ctx import (
+            fetch_safe_ctx_size,
+            fetch_model_metadata,
+        )
+        from gb_ai_server.infrastructure.persistence.hardware_prober import probe_hardware
+        from gb_ai_server.domain.gpu_layer_calculator import GPULayerCalculator
+
         os.environ["LLAMA_MODEL"] = model.filename
-        os.environ["N_GPU_LAYERS"] = str(model.n_gpu_layers)
-        # Use HF config.json + VRAM to compute the largest safe context window.
-        # This is the authoritative value written to .env and passed to the container.
-        from gb_ai_server.infrastructure.persistence.fetch_hf_ctx import fetch_safe_ctx_size
+
         repo_id = (
             model.url.split("huggingface.co/")[-1].split("/resolve/")[0]
             if "huggingface.co" in model.url
             else model.display_name
         )
+
+        # Context window from HF config.json + VRAM
         ctx = fetch_safe_ctx_size(repo_id)
         os.environ["CTX_SIZE"] = str(ctx)
+
+        # GPU layers calculated from model architecture + VRAM
+        hw = probe_hardware()
+        metadata = fetch_model_metadata(repo_id)
+        if metadata is not None and hw.vram_total_mb > 0:
+            calc = GPULayerCalculator(metadata)
+            result = calc.calculate_gpu_layers(hw.vram_total_mb)
+            os.environ["N_GPU_LAYERS"] = str(result.gpu_layers)
+            self._infra.logger.info(
+                f"GPU layers: {result.gpu_layers}/{result.total_layers} "
+                f"({result.per_layer_memory_mb:.0f}MB/layer, "
+                f"VRAM={result.available_vram_mb:.0f}MB)"
+            )
+        else:
+            # Fallback: offload all layers (llama.cpp default)
+            os.environ["N_GPU_LAYERS"] = "999"
 
         # Write to .env so docker-compose picks it up (overrides existing values)
         env_path = Path(".env")
@@ -273,6 +301,15 @@ class BootstrapCompositionRoot:
             self._prerequisite_presenter.detection_failed()
             raise SystemExit(1)
         return result
+
+    def _ensure_cdi(self) -> None:
+        """Ensure CDI is active for GPU passthrough before starting containers."""
+        cdi = self._infra.cdi_service
+        status = cdi.ensure()
+        if not status.active:
+            self._infra.logger.warn(
+                "CDI not available — container may fall back to CPU"
+            )
 
     def _ensure_model_available(
         self, resolver: ModelPathResolver, model: ModelEntry, args: Namespace
