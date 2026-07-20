@@ -11,19 +11,20 @@ class ModelEntry:
     Immutable model specification entry.
 
     Holds only what is needed to identify and download the model.
-    Context window is NOT stored here — it is derived at runtime from the
-    HuggingFace Hub library (config.json) by fetch_safe_ctx_size().
+    Context window and GPU layers are NOT stored here — they are derived
+    at runtime from the HuggingFace Hub library (config.json) and
+    available VRAM via GPULayerCalculator.
 
     Supports two parse formats for backward compatibility:
       3-part: "display_name|filename|download_url"
       5-part: "display_name|filename|download_url|n_gpu_layers|ctx_size"
-              (ctx_size field is accepted but ignored — HF is the source of truth)
+              (both n_gpu_layers and ctx_size are accepted but ignored —
+               HF config + VRAM probe are the source of truth at runtime)
     """
 
     display_name: str
     filename: str
     url: str
-    n_gpu_layers: int = 999
 
     @classmethod
     def from_string(cls, entry: str) -> ModelEntry:
@@ -33,7 +34,8 @@ class ModelEntry:
         Args:
             entry: "display_name|filename|url"
                 or "display_name|filename|url|n_gpu_layers|ctx_size"
-                (ctx_size accepted for compatibility but not stored)
+                (n_gpu_layers and ctx_size accepted for compatibility
+                 but not stored — calculated at runtime)
 
         Returns:
             ModelEntry instance.
@@ -54,16 +56,13 @@ class ModelEntry:
         if not all([display_name, filename, url]):
             raise ValueError("Model entry contains empty fields")
 
-        n_gpu_layers = 999
-        if len(parts) == 5:
-            n_gpu_layers = int(parts[3].strip())
-            # parts[4] is ctx_size — ignored, HF lib is the source of truth
+        # parts[3] (n_gpu_layers) and parts[4] (ctx_size) are ignored —
+        # both are calculated at runtime from HF config + VRAM probe.
 
         return cls(
             display_name=display_name.strip(),
             filename=filename.strip(),
             url=url.strip(),
-            n_gpu_layers=n_gpu_layers,
         )
 
     @classmethod
@@ -74,18 +73,18 @@ class ModelEntry:
         Args:
             entry: (display_name, filename, url)
                 or (display_name, filename, url, n_gpu_layers, ctx_size)
-                (ctx_size accepted for compatibility but not stored)
+                (n_gpu_layers and ctx_size accepted for compatibility
+                 but not stored — calculated at runtime)
 
         Returns:
             ModelEntry instance.
         """
-        n_gpu_layers = entry[3] if len(entry) >= 4 else 999
-        # entry[4] would be ctx_size — ignored, HF lib is the source of truth
+        # entry[3] (n_gpu_layers) and entry[4] (ctx_size) are ignored —
+        # both are calculated at runtime from HF config + VRAM probe.
         return cls(
             display_name=entry[0],
             filename=entry[1],
             url=entry[2],
-            n_gpu_layers=n_gpu_layers,
         )
 
     def __str__(self) -> str:

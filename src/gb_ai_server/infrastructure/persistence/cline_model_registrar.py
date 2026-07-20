@@ -8,8 +8,28 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ...application.ports.outbound.logger import Logger
-from ...domain.resource_requirements_mapper import ResourceRequirementsMapper
 
+
+def _resolve_ctx_size(filename: str) -> int:
+    """Resolve context window from GGUF metadata or fall back to default.
+
+    Tries GGUF metadata first, then falls back to 32768 (safe default).
+    """
+    from gb_ai_server.infrastructure.persistence.gguf_reader import read_context_window
+    import os
+
+    search_dirs = os.environ.get("MODEL_DIRS", os.environ.get("MODELS_DIR", "")).split(":")
+    search_dirs = [d for d in search_dirs if d]
+    search_dirs.append(os.getcwd())
+
+    for base in search_dirs:
+        candidate = os.path.join(base, filename)
+        if os.path.exists(candidate):
+            ctx = read_context_window(candidate)
+            if ctx:
+                return ctx
+
+    return 32768
 
 class ClineModelRegistrar:
     """Register local models with Cline by updating ~/.cline/ configuration.
@@ -148,9 +168,8 @@ class ClineModelRegistrar:
             data["version"] = 1
         if "providers" not in data:
             data["providers"] = {}
-
         display_name, filename, port, container_name = model[0], model[1], model[2], model[3]
-        ctx_size = ResourceRequirementsMapper.context_size_for_model(filename)
+        ctx_size = _resolve_ctx_size(filename)
 
         base_url = provider_base_url or f"http://localhost:{port}"
 

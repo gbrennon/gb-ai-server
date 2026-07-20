@@ -5,6 +5,9 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 
+from ..cdi import CdiService
+from ..logging import TerminalLogger
+
 
 @dataclass
 class HardwareInfo:
@@ -37,14 +40,12 @@ def probe_hardware() -> HardwareInfo:
     except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
         pass
 
-    # CDI check
+    # CDI check via CdiService (centralized CDI logic)
     try:
-        result = subprocess.run(
-            ["nvidia-ctk", "cdi", "list"],
-            capture_output=True, text=True, timeout=5
-        )
-        info.cdi_active = result.returncode == 0 and "gpu" in result.stdout.lower()
-    except FileNotFoundError:
+        cdi = CdiService(TerminalLogger())
+        status = cdi.check()
+        info.cdi_active = status.active
+    except Exception:
         pass
 
     # System RAM

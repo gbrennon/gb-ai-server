@@ -1,4 +1,4 @@
-.PHONY: help up down logs status ps models check-cdi clean restart bootstrap bootstrap-dry bootstrap-quick bootstrap-register clean-all register
+.PHONY: help up down logs status ps models check-cdi enable-cdi clean restart bootstrap bootstrap-dry bootstrap-quick bootstrap-register clean-all register
 
 COMPOSE_FILE := docker-compose.yml
 ENV_FILE := .env
@@ -47,6 +47,18 @@ logs-coder: ## Follow llama logs
 
 ##@ GPU & Environment
 
+enable-cdi: ## Generate CDI specs if missing (auto-enabled by bootstrap)
+	@if command -v nvidia-ctk &>/dev/null; then \
+		if nvidia-ctk cdi list 2>/dev/null | grep -qi gpu; then \
+			echo "✓ CDI already active"; \
+		else \
+			echo "Generating CDI specs..."; \
+			nvidia-ctk cdi generate 2>/dev/null && echo "✓ CDI enabled" || echo "⚠ Could not enable CDI"; \
+		fi; \
+	else \
+		echo "⚠ nvidia-ctk not found — GPU passthrough unavailable"; \
+	fi
+
 check-cdi: ## Verify CDI setup and list GPUs
 	@echo "=== CDI Status ==="
 	@nvidia-ctk cdi list || echo "Error: nvidia-ctk not found"
@@ -63,7 +75,7 @@ models: ## List models in llama_models volume
 
 ##@ Bootstrap
 
-bootstrap: ## Start server
+bootstrap: enable-cdi ## Start server (enables CDI first)
 	uv run gb-ai-server
 
 bootstrap-dry: ## Dry-run (preview only)

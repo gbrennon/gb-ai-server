@@ -95,7 +95,7 @@ def _has_cline_key() -> bool:
     return bool(os.environ.get("CLINE_USER_KEY", "").startswith("sk_"))
 
 
-def register(display_name: str, container_name: str, ctx_size: int, port: int = 8081) -> bool:
+def register(display_name: str, container_name: str, ctx_size: int, port: int = 8081, n_gpu_layers: int = 999) -> bool:
     omp_dir = _omp_dir()
     omp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -152,11 +152,12 @@ def register(display_name: str, container_name: str, ctx_size: int, port: int = 
     local_full = f"{LLAMA_PROVIDER}/{model_id}"
     cline_full = f"{CLINE_PROVIDER}/deepseek/deepseek-v4-pro" if _has_cline_key() else local_full
 
-    # Model roles
+    # Model roles — all powered by Cline DeepSeek V4 Pro when key is set,
+    # falling back to local llama.cpp otherwise.
     config.setdefault("modelRoles", {})
     roles = config["modelRoles"]
-    roles.setdefault("plan", local_full)
-    roles.setdefault("smol", local_full)
+    roles.setdefault("plan", cline_full)
+    roles.setdefault("smol", cline_full)
     roles.setdefault("task", cline_full)
     roles.setdefault("default", cline_full)
     roles.setdefault("slow", cline_full)
@@ -166,8 +167,7 @@ def register(display_name: str, container_name: str, ctx_size: int, port: int = 
     advisor = config["advisor"]
     advisor.setdefault("enabled", True)
     advisor.setdefault("subagents", True)
-    advisor.setdefault("model", local_full)
-
+    advisor.setdefault("model", cline_full)
     # Sampling params (GGUF-friendly)
     for key, value in GGUF_SAMPLING.items():
         config.setdefault(key, value)

@@ -41,7 +41,7 @@ def _probe_server_ctx(port: int) -> int | None:
         return None
 
 
-def register(display_name: str, container_name: str, ctx_size: int, port: int = 8081) -> bool:
+def register(display_name: str, container_name: str, ctx_size: int, port: int = 8081, n_gpu_layers: int = 999) -> bool:
     cline_dir = _cline_data_dir()
     settings_dir = cline_dir / "settings"
     settings_dir.mkdir(parents=True, exist_ok=True)

@@ -174,6 +174,66 @@ def fetch_safe_ctx_size(repo_id: str) -> int:
     return max(safe_ctx, 2048)
 
 
+def fetch_model_metadata(repo_id: str) -> ModelMetadata | None:
+    """Extract full model architecture metadata from HuggingFace config.json.
+
+    Returns a ModelMetadata with all fields needed by GPULayerCalculator.
+    Falls back through the same chain as fetch_context_window():
+      1. config.json from HuggingFace (authoritative)
+      2. Local GGUF binary metadata (offline fallback)
+
+    Returns None when no usable metadata is available.
+    """
+    from gb_ai_server.domain.model_metadata import ModelMetadata
+
+    config = _load_hf_config(repo_id)
+    if config is None and repo_id.upper().endswith("-GGUF"):
+        config = _load_hf_config(repo_id[: -len("-GGUF")])
+
+    if config:
+        num_hidden_layers = config.get("num_hidden_layers")
+        hidden_size = config.get("hidden_size")
+        num_kv_heads = config.get("num_key_value_heads") or config.get("num_attention_heads", 0)
+        n_heads = config.get("num_attention_heads")
+        head_dim = config.get("head_dim")
+        vocab_size = config.get("vocab_size", 0)
+        max_pos = config.get("max_position_embeddings", 0)
+
+        if head_dim is None and n_heads and hidden_size:
+            head_dim = hidden_size // n_heads
+
+        if all([num_hidden_layers, hidden_size, num_kv_heads, head_dim, vocab_size, max_pos]):
+            return ModelMetadata(
+                num_hidden_layers=int(num_hidden_layers),
+                hidden_size=int(hidden_size),
+                num_kv_heads=int(num_kv_heads),
+                head_dim=int(head_dim),
+                vocab_size=int(vocab_size),
+                max_position_embeddings=int(max_pos),
+                repo_id=repo_id,
+            )
+
+    # Fallback: try local GGUF
+    from .gguf_reader import read_context_window
+    gguf_path = _find_local_gguf(repo_id)
+    if gguf_path:
+        ctx = read_context_window(gguf_path)
+        if ctx:
+            # Minimal metadata from GGUF — assume typical 7B architecture
+            # This is a best-effort fallback for offline scenarios
+            return ModelMetadata(
+                num_hidden_layers=32,
+                hidden_size=4096,
+                num_kv_heads=32,
+                head_dim=128,
+                vocab_size=32000,
+                max_position_embeddings=ctx,
+                repo_id=repo_id,
+            )
+
+    return None
+
+
 def main() -> int:
     """CLI entry point for standalone usage."""
     if len(sys.argv) < 2:

@@ -1,6 +1,9 @@
 """Domain layer - pure business logic with no I/O or infrastructure dependencies."""
 
 from .model_entry import ModelEntry
+from .model_metadata import ModelMetadata
+from .gpu_layer_calculation import GPULayerCalculation
+from .gpu_layer_calculator import GPULayerCalculator
 from .port_allocator import PortAllocator
 from .container_namer import ContainerNamer
 from .resource_requirements import ResourceRequirements
@@ -12,6 +15,9 @@ from .command_result import CommandResult
 
 __all__: list[str] = [
     "ModelEntry",
+    "ModelMetadata",
+    "GPULayerCalculation",
+    "GPULayerCalculator",
     "PortAllocator",
     "ContainerNamer",
     "ResourceRequirements",

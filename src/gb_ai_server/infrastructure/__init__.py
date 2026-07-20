@@ -30,6 +30,7 @@ from .compose import (
 )
 from .persistence import HuggingFaceModelDownloader, ClineModelRegistrar
 from .http import CurlHttpClient
+from .cdi import CdiService, CdiStatus
 from .di import Container, InfrastructureRegistry, VerifierFactory, ComposeServiceFactory, ModelServiceFactory
 
 __all__: list[str] = [
@@ -62,6 +63,8 @@ __all__: list[str] = [
     "HuggingFaceModelDownloader",
     "CurlHttpClient",
     "ClineModelRegistrar",
+    "CdiService",
+    "CdiStatus",
     "Container",
     "InfrastructureRegistry",
     "VerifierFactory",
