@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from ...application.ports.outbound import ComposeTool, ComposeLifecycle, ComposeQuery
 from ...application.ports.outbound.compose_detection import ComposeDetection
-from ..podman import (
+from ..executors.podman import (
     PodmanComposeStandalone,
     PodmanComposeStandaloneLifecycle,
     PodmanComposeStandaloneQuery,
@@ -11,7 +11,7 @@ from ..podman import (
     PodmanComposeBuiltinLifecycle,
     PodmanComposeBuiltinQuery,
 )
-from ..docker import (
+from ..executors.docker import (
     DockerComposeStandalone,
     DockerComposeStandaloneLifecycle,
     DockerComposeStandaloneQuery,

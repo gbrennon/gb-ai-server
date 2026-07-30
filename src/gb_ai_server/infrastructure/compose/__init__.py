@@ -1,6 +1,6 @@
 """Compose tool adapters (Docker Compose, Podman Compose)."""
 
-from ..docker import (
+from ..executors.docker import (
     DockerComposeBuiltin,
     DockerComposeBuiltinLifecycle,
     DockerComposeBuiltinQuery,
@@ -8,7 +8,7 @@ from ..docker import (
     DockerComposeStandaloneLifecycle,
     DockerComposeStandaloneQuery,
 )
-from ..podman import (
+from ..executors.podman import (
     PodmanComposeBuiltin,
     PodmanComposeBuiltinLifecycle,
     PodmanComposeBuiltinQuery,
