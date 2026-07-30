@@ -7,30 +7,30 @@ import pytest
 from gb_ai_server.infrastructure.container_runtime.detector import (
     FallbackRuntimeDetector,
 )
-from gb_ai_server.infrastructure.podman import PodmanRuntime
-from gb_ai_server.infrastructure.podman import PodmanInspector
-from gb_ai_server.infrastructure.podman import PodmanOperator
-from gb_ai_server.infrastructure.docker import DockerRuntime
-from gb_ai_server.infrastructure.docker import DockerInspector
-from gb_ai_server.infrastructure.docker import DockerOperator
+from gb_ai_server.infrastructure.executors.podman import PodmanRuntime
+from gb_ai_server.infrastructure.executors.podman import PodmanInspector
+from gb_ai_server.infrastructure.executors.podman import PodmanOperator
+from gb_ai_server.infrastructure.executors.docker import DockerRuntime
+from gb_ai_server.infrastructure.executors.docker import DockerInspector
+from gb_ai_server.infrastructure.executors.docker import DockerOperator
 
-from gb_ai_server.infrastructure.podman import PodmanComposeStandaloneLifecycle
-from gb_ai_server.infrastructure.podman import PodmanComposeStandaloneQuery
-from gb_ai_server.infrastructure.podman import PodmanComposeBuiltinLifecycle
-from gb_ai_server.infrastructure.podman import PodmanComposeBuiltinQuery
-from gb_ai_server.infrastructure.docker import DockerComposeStandaloneLifecycle
-from gb_ai_server.infrastructure.docker import DockerComposeStandaloneQuery
-from gb_ai_server.infrastructure.docker import DockerComposeBuiltinLifecycle
-from gb_ai_server.infrastructure.docker import DockerComposeBuiltinQuery
+from gb_ai_server.infrastructure.executors.podman import PodmanComposeStandaloneLifecycle
+from gb_ai_server.infrastructure.executors.podman import PodmanComposeStandaloneQuery
+from gb_ai_server.infrastructure.executors.podman import PodmanComposeBuiltinLifecycle
+from gb_ai_server.infrastructure.executors.podman import PodmanComposeBuiltinQuery
+from gb_ai_server.infrastructure.executors.docker import DockerComposeStandaloneLifecycle
+from gb_ai_server.infrastructure.executors.docker import DockerComposeStandaloneQuery
+from gb_ai_server.infrastructure.executors.docker import DockerComposeBuiltinLifecycle
+from gb_ai_server.infrastructure.executors.docker import DockerComposeBuiltinQuery
 from gb_ai_server.infrastructure.compose.detector import FallbackComposeDetector
-from gb_ai_server.infrastructure.podman import (
+from gb_ai_server.infrastructure.executors.podman import (
     PodmanComposeStandalone,
 )
-from gb_ai_server.infrastructure.docker import (
+from gb_ai_server.infrastructure.executors.docker import (
     DockerComposeStandalone,
 )
-from gb_ai_server.infrastructure.podman import PodmanComposeBuiltin
-from gb_ai_server.infrastructure.docker import DockerComposeBuiltin
+from gb_ai_server.infrastructure.executors.podman import PodmanComposeBuiltin
+from gb_ai_server.infrastructure.executors.docker import DockerComposeBuiltin
 from tests.gb_ai_server.helpers import make_script
 
 
